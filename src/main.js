@@ -1,8 +1,13 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
 
-const app = mount(App, {
-    target: document.getElementById('app')
-});
+async function prepare() {
+  if (import.meta.env.VITE_API_BASE_URL === '') {
+    const { worker } = await import('./mocks/browser.js');
+    await worker.start({ onUnhandledRequest: 'bypass' });
+  }
+}
 
-export default app;
+prepare().then(() => {
+  mount(App, { target: document.getElementById('app') });
+});

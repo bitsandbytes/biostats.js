@@ -1,28 +1,35 @@
 <script>
-  const message = "Hello, world!";
+  import { onMount } from 'svelte';
+  import { Router, Route } from 'svelte-routing';
+  import { auth, initSession } from './stores/auth.svelte.js';
+  import AppShell from './components/layout/AppShell.svelte';
+  import Login from './routes/Login.svelte';
+  import Dashboard from './routes/Dashboard.svelte';
+  import PersonDetail from './routes/PersonDetail.svelte';
+  import Import from './routes/Import.svelte';
+  import Admin from './routes/Admin.svelte';
+
+  let ready = $state(false);
+
+  onMount(async () => {
+    await initSession();
+    ready = true;
+  });
 </script>
 
-<main class="app">
-  <h1>{message}</h1>
-  <p>Your first Svelte app is running.</p>
-</main>
-
-<style>
-  .app {
-    min-height: 100vh;
-    display: grid;
-    place-items: center;
-    font-family: system-ui, sans-serif;
-    text-align: center;
-  }
-
-  h1 {
-    font-size: 3rem;
-    margin: 0;
-  }
-
-  p {
-    color: #555;
-    margin-top: 0.75rem;
-  }
-</style>
+{#if !ready}
+  <!-- Waiting for session check -->
+{:else if auth.session}
+  <Router>
+    <AppShell>
+      <Route path="/" component={Dashboard} />
+      <Route path="/person/:id" component={PersonDetail} let:params>
+        <PersonDetail id={params.id} />
+      </Route>
+      <Route path="/import" component={Import} />
+      <Route path="/admin" component={Admin} />
+    </AppShell>
+  </Router>
+{:else}
+  <Login />
+{/if}
