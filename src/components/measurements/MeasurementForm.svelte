@@ -1,5 +1,4 @@
 <script>
-  import AutocompleteInput from '../ui/AutocompleteInput.svelte';
   import Button from '../ui/Button.svelte';
   import { typeNames, suggestUnits } from '../../stores/measurementTypes.svelte.js';
   import { today } from '../../lib/format.js';
@@ -11,7 +10,8 @@
   let unit = $state('');
   let measured_at = $state(today());
 
-  let unitSuggestions = $derived(suggestUnits(type));
+  let types = $derived(typeNames());
+  let unitOptions = $derived(suggestUnits(type));
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -27,7 +27,12 @@
   <div class="fields">
     <div class="field">
       <label for="mf-type">Type</label>
-      <AutocompleteInput id="mf-type" bind:value={type} suggestions={typeNames()} placeholder="e.g. height" />
+      <select id="mf-type" bind:value={type} onchange={() => { unit = ''; }} required>
+        <option value="">Select type…</option>
+        {#each types as t}
+          <option value={t}>{t}</option>
+        {/each}
+      </select>
     </div>
     <div class="field field-value">
       <label for="mf-value">Value</label>
@@ -35,7 +40,12 @@
     </div>
     <div class="field">
       <label for="mf-unit">Unit</label>
-      <AutocompleteInput id="mf-unit" bind:value={unit} suggestions={unitSuggestions} placeholder="e.g. cm" />
+      <select id="mf-unit" bind:value={unit} required disabled={!type}>
+        <option value="">Select unit…</option>
+        {#each unitOptions as u}
+          <option value={u}>{u}</option>
+        {/each}
+      </select>
     </div>
     <div class="field">
       <label for="mf-date">Date</label>
@@ -77,10 +87,17 @@
     color: #374151;
   }
   input[type="number"],
-  input[type="date"] {
+  input[type="date"],
+  select {
     padding: 0.45rem 0.75rem;
     border: 1px solid #d1d5db;
     border-radius: 6px;
     font-size: 0.9rem;
+    background: white;
+  }
+  select:disabled {
+    background: #f3f4f6;
+    color: #9ca3af;
+    cursor: not-allowed;
   }
 </style>

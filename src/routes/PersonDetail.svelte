@@ -44,40 +44,42 @@
   }
 </script>
 
-{#if loading}
-  <p>Loading…</p>
-{:else if person}
-  <div class="person-detail">
-    <div class="header">
-      <div>
-        <h1>{person.name}</h1>
-        {#if person.notes}
-          <p class="notes">{person.notes}</p>
-        {/if}
+<div class="person-detail-wrapper">
+  {#if loading}
+    <p>Loading…</p>
+  {:else if person}
+    <div class="person-detail">
+      <div class="header">
+        <div>
+          <h1>{person.name}</h1>
+          {#if person.notes}
+            <p class="notes">{person.notes}</p>
+          {/if}
+        </div>
+        <Button variant="danger" onclick={() => { showDeleteModal = true; }}>Delete Person</Button>
       </div>
-      <Button variant="danger" onclick={() => { showDeleteModal = true; }}>Delete Person</Button>
+
+      <section>
+        <h2>Add Measurement</h2>
+        <MeasurementForm onsubmit={handleAddMeasurement} {submitting} />
+      </section>
+
+      <section>
+        <h2>History</h2>
+        <MeasurementTable measurements={person.measurements} ondelete={handleDeleteMeasurement} />
+      </section>
+
+      <section>
+        <h2>Trends</h2>
+        <TrendChart measurements={person.measurements} />
+      </section>
     </div>
+  {/if}
 
-    <section>
-      <h2>Add Measurement</h2>
-      <MeasurementForm onsubmit={handleAddMeasurement} {submitting} />
-    </section>
-
-    <section>
-      <h2>History</h2>
-      <MeasurementTable measurements={person.measurements} ondelete={handleDeleteMeasurement} />
-    </section>
-
-    <section>
-      <h2>Trends</h2>
-      <TrendChart measurements={person.measurements} />
-    </section>
-  </div>
-{/if}
-
-{#if showDeleteModal && person}
-  <DeletePersonModal {person} onconfirm={handleDeletePerson} onclose={() => { showDeleteModal = false; }} />
-{/if}
+  {#if showDeleteModal && person}
+    <DeletePersonModal {person} onconfirm={handleDeletePerson} onclose={() => { showDeleteModal = false; }} />
+  {/if}
+</div>
 
 <style>
   .person-detail {

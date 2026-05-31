@@ -8,6 +8,15 @@ const users = [
 const people = [];
 const measurements = [];
 
+const measurementTypes = [
+  { type: 'height',      units: ['cm', 'in'] },
+  { type: 'weight',      units: ['kg', 'lb'] },
+  { type: 'temperature', units: ['°C', '°F'] },
+  { type: 'heart rate',  units: ['bpm'] },
+  { type: 'blood pressure systolic',  units: ['mmHg'] },
+  { type: 'blood pressure diastolic', units: ['mmHg'] },
+];
+
 let sessionUserId = null;
 let nextId = 1;
 const uid = () => `gen-${nextId++}`;
@@ -145,12 +154,7 @@ export const handlers = [
   http.get('/api/measurement-types', () => {
     const denied = requireSession();
     if (denied) return denied;
-    const map = {};
-    for (const m of measurements) {
-      if (!map[m.type]) map[m.type] = new Set();
-      map[m.type].add(m.unit);
-    }
-    return HttpResponse.json(Object.entries(map).map(([type, units]) => ({ type, units: [...units] })));
+    return HttpResponse.json(measurementTypes);
   }),
 
   // Import

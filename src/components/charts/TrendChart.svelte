@@ -4,7 +4,7 @@
 
   let { measurements = [] } = $props();
 
-  let el;
+  let el = $state();
 
   $effect(() => {
     if (!el || measurements.length === 0) return;

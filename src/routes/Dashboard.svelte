@@ -29,11 +29,11 @@
       {/each}
     </div>
   {/if}
-</div>
 
-{#if showAddModal}
-  <AddPersonModal onclose={() => { showAddModal = false; }} />
-{/if}
+  {#if showAddModal}
+    <AddPersonModal onclose={() => { showAddModal = false; }} />
+  {/if}
+</div>
 
 <style>
   .dashboard {

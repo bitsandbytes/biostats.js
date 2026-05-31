@@ -201,7 +201,7 @@ Delete a single measurement.
 
 ### `GET /api/measurement-types`
 
-Return all known type+unit combinations derived from existing measurement data. Used to populate autocomplete dropdowns in `MeasurementForm`.
+Return all predefined measurement type+unit combinations managed in the database. Used to populate the type and unit dropdowns in `MeasurementForm`. Selecting a type on the frontend filters the unit list to only the units valid for that type.
 
 - **Auth required:** Yes
 - **Response `200`:** `TypeSuggestion[]`
@@ -220,7 +220,6 @@ Return all known type+unit combinations derived from existing measurement data. 
     { "type": "weight", "units": ["kg", "lb"] }
   ]
   ```
-  When the user selects a type, the frontend filters this list to suggest matching units.
 
 ---
 

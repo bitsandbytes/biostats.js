@@ -22,12 +22,10 @@
 {:else if auth.session}
   <Router>
     <AppShell>
-      <Route path="/" component={Dashboard} />
-      <Route path="/person/:id" component={PersonDetail} let:params>
-        <PersonDetail id={params.id} />
-      </Route>
-      <Route path="/import" component={Import} />
-      <Route path="/admin" component={Admin} />
+      <Route path="/"><Dashboard /></Route>
+      <Route path="/person/:id" let:params><PersonDetail id={params.id} /></Route>
+      <Route path="/import"><Import /></Route>
+      <Route path="/admin"><Admin /></Route>
     </AppShell>
   </Router>
 {:else}
