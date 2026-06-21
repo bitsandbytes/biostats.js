@@ -1,6 +1,6 @@
 import * as api from '../lib/api.js';
 
-export const auth = $state({ session: null }); // session: null | { id, email }
+export const auth = $state({ session: null }); // session: null | { id, email, admin }
 
 export async function initSession() {
   try {

@@ -54,7 +54,8 @@ Return the currently authenticated user. Called on app load to restore session s
   ```json
   {
     "id": "uuid",
-    "email": "string"
+    "email": "string",
+    "admin": true
   }
   ```
 - **Response `401`** if no valid session.
@@ -263,17 +264,19 @@ Bulk-import measurements from a parsed CSV. The backend upserts persons by name 
 
 Return all registered users. Admin use only.
 
-- **Auth required:** Yes
+- **Auth required:** Yes (`ROLE_ADMIN`)
 - **Response `200`:** `User[]`
   ```json
   [
     {
       "id": "uuid",
       "email": "string",
-      "created_at": "ISO 8601 timestamp"
+      "created_at": "ISO 8601 timestamp",
+      "admin": true
     }
   ]
   ```
+- **Response `403`** if the authenticated user is not an admin.
 
 ---
 
@@ -281,22 +284,26 @@ Return all registered users. Admin use only.
 
 Create a new user account.
 
-- **Auth required:** Yes
+- **Auth required:** Yes (`ROLE_ADMIN`)
 - **Request body:**
   ```json
   {
     "email": "string",
-    "password": "string"
+    "password": "string",
+    "admin": false
   }
   ```
+  `admin` is optional; defaults to `false`.
 - **Response `200`:** `User`
   ```json
   {
     "id": "uuid",
     "email": "string",
-    "created_at": "ISO 8601 timestamp"
+    "created_at": "ISO 8601 timestamp",
+    "admin": false
   }
   ```
+- **Response `403`** if the authenticated user is not an admin.
 - **Response `409`** if email already exists.
 
 ---
@@ -305,7 +312,7 @@ Create a new user account.
 
 Delete a user account.
 
-- **Auth required:** Yes
+- **Auth required:** Yes (`ROLE_ADMIN`)
 - **Path parameter:** `id` — user UUID
 - **Response:** `204 No Content`
 - **Response `404`** if user not found.
@@ -319,6 +326,7 @@ User
   id          uuid
   email       string (unique)
   created_at  ISO 8601 timestamp
+  admin       boolean
 
 Person
   id          uuid

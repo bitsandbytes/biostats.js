@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw';
 
 // --- seed data ---
 const users = [
-  { id: 'user-1', email: 'timbitsandbytes@gmail.com', password: 'pw', created_at: '2025-01-01T00:00:00Z' },
+  { id: 'user-1', email: 'timbitsandbytes@gmail.com', password: 'pw', admin: true, created_at: '2025-01-01T00:00:00Z' },
 ];
 
 const people = [];
@@ -39,6 +39,14 @@ function requireSession() {
   return null;
 }
 
+function requireAdmin() {
+  const denied = requireSession();
+  if (denied) return denied;
+  const user = users.find(u => u.id === sessionUserId);
+  if (!user?.admin) return HttpResponse.json({ error: 'Forbidden' }, { status: 403 });
+  return null;
+}
+
 // --- handlers ---
 export const handlers = [
 
@@ -67,23 +75,23 @@ export const handlers = [
 
   // Users
   http.get('/api/users', () => {
-    const denied = requireSession();
+    const denied = requireAdmin();
     if (denied) return denied;
     return HttpResponse.json(users.map(({ password: _, ...u }) => u));
   }),
 
   http.post('/api/users', async ({ request }) => {
-    const denied = requireSession();
+    const denied = requireAdmin();
     if (denied) return denied;
-    const { email, password } = await request.json();
-    const user = { id: uid(), email, password, created_at: new Date().toISOString() };
+    const { email, password, admin = false } = await request.json();
+    const user = { id: uid(), email, password, admin, created_at: new Date().toISOString() };
     users.push(user);
     const { password: _, ...safe } = user;
     return HttpResponse.json(safe, { status: 201 });
   }),
 
   http.delete('/api/users/:id', ({ params }) => {
-    const denied = requireSession();
+    const denied = requireAdmin();
     if (denied) return denied;
     const idx = users.findIndex(u => u.id === params.id);
     if (idx === -1) return HttpResponse.json({ error: 'Not found' }, { status: 404 });

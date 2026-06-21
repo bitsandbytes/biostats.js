@@ -25,7 +25,7 @@
       <Route path="/"><Dashboard /></Route>
       <Route path="/person/:id" let:params><PersonDetail id={params.id} /></Route>
       <Route path="/import"><Import /></Route>
-      <Route path="/admin"><Admin /></Route>
+      {#if auth.session?.admin}<Route path="/admin"><Admin /></Route>{/if}
     </AppShell>
   </Router>
 {:else}

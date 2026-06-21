@@ -11,7 +11,7 @@
   <div class="links">
     <Link to="/">Dashboard</Link>
     <Link to="/import">Import</Link>
-    <Link to="/admin">Admin</Link>
+    {#if auth.session?.admin}<Link to="/admin">Admin</Link>{/if}
   </div>
   <div class="user">
     <span>{auth.session?.email}</span>
