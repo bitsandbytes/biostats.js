@@ -3,6 +3,16 @@
   import * as api from '../lib/api.js';
   import Button from '../components/ui/Button.svelte';
   import EmptyState from '../components/ui/EmptyState.svelte';
+  import {
+    store as measurementTypesStore,
+    loadTypes,
+    createType,
+    renameType,
+    removeType,
+    addUnit,
+    renameUnit,
+    removeUnit,
+  } from '../stores/measurementTypes.svelte.js';
 
   let users = $state([]);
   let email = $state('');
@@ -12,13 +22,95 @@
   let error = $state('');
   let forbidden = $state(false);
 
+  let newTypeLabel = $state('');
+  let typeError = $state('');
+  let newUnitDrafts = $state({}); // typeId -> { label, abbreviation }
+  let unitError = $state({}); // typeId -> string
+  let editingTypeId = $state(null);
+  let editTypeLabel = $state('');
+  let editingUnitId = $state(null);
+  let editUnitLabel = $state('');
+  let editUnitAbbr = $state('');
+
   onMount(async () => {
     try {
       users = await api.getUsers();
     } catch (err) {
       if (err?.status === 403 || err?.error === 'Forbidden') forbidden = true;
     }
+    try {
+      await loadTypes();
+    } catch (err) {
+      // measurement types section will just show empty; users list already reports 403
+    }
   });
+
+  function draftFor(typeId) {
+    return newUnitDrafts[typeId] ?? { label: '', abbreviation: '' };
+  }
+
+  async function handleAddType(e) {
+    e.preventDefault();
+    typeError = '';
+    try {
+      await createType(newTypeLabel);
+      newTypeLabel = '';
+    } catch (err) {
+      typeError = err?.message ?? 'Failed to create type.';
+    }
+  }
+
+  async function handleDeleteType(id) {
+    await removeType(id);
+  }
+
+  function startEditType(type) {
+    editingTypeId = type.id;
+    editTypeLabel = type.label;
+  }
+
+  function cancelEditType() {
+    editingTypeId = null;
+    editTypeLabel = '';
+  }
+
+  async function saveEditType(id) {
+    await renameType(id, editTypeLabel);
+    cancelEditType();
+  }
+
+  async function handleAddUnit(e, typeId) {
+    e.preventDefault();
+    unitError = { ...unitError, [typeId]: '' };
+    const draft = draftFor(typeId);
+    try {
+      await addUnit(typeId, { label: draft.label, abbreviation: draft.abbreviation });
+      newUnitDrafts = { ...newUnitDrafts, [typeId]: { label: '', abbreviation: '' } };
+    } catch (err) {
+      unitError = { ...unitError, [typeId]: err?.message ?? 'Failed to add unit.' };
+    }
+  }
+
+  async function handleDeleteUnit(typeId, unitId) {
+    await removeUnit(typeId, unitId);
+  }
+
+  function startEditUnit(unit) {
+    editingUnitId = unit.id;
+    editUnitLabel = unit.label;
+    editUnitAbbr = unit.abbreviation;
+  }
+
+  function cancelEditUnit() {
+    editingUnitId = null;
+    editUnitLabel = '';
+    editUnitAbbr = '';
+  }
+
+  async function saveEditUnit(typeId, unitId) {
+    await renameUnit(typeId, unitId, { label: editUnitLabel, abbreviation: editUnitAbbr });
+    cancelEditUnit();
+  }
 
   async function handleAddUser(e) {
     e.preventDefault();
@@ -93,6 +185,79 @@
         </table>
       {/if}
     </section>
+
+    <section class="measurement-types">
+      <h2>Measurement Types</h2>
+      {#if typeError}<p class="error">{typeError}</p>{/if}
+      <form onsubmit={handleAddType} class="form">
+        <div class="field">
+          <label for="new-type-label">New type label</label>
+          <input id="new-type-label" bind:value={newTypeLabel} placeholder="e.g. height" required />
+        </div>
+        <Button type="submit">Add Type</Button>
+      </form>
+
+      {#if measurementTypesStore.types.length === 0}
+        <EmptyState message="No measurement types yet." />
+      {:else}
+        <div class="type-list">
+          {#each measurementTypesStore.types as type (type.id)}
+            <div class="type-group">
+              <div class="type-header">
+                {#if editingTypeId === type.id}
+                  <input bind:value={editTypeLabel} />
+                  <Button onclick={() => saveEditType(type.id)}>Save</Button>
+                  <Button variant="ghost" onclick={cancelEditType}>Cancel</Button>
+                {:else}
+                  <h3>{type.label}</h3>
+                  <Button variant="ghost" onclick={() => startEditType(type)}>Rename</Button>
+                  <Button variant="ghost" onclick={() => handleDeleteType(type.id)}>Delete</Button>
+                {/if}
+              </div>
+
+              {#if type.units.length === 0}
+                <p class="no-units">No units yet.</p>
+              {:else}
+                <ul class="unit-list">
+                  {#each type.units as unit (unit.id)}
+                    <li>
+                      {#if editingUnitId === unit.id}
+                        <input bind:value={editUnitLabel} placeholder="Label" />
+                        <input bind:value={editUnitAbbr} placeholder="Abbreviation" class="abbr-input" />
+                        <Button onclick={() => saveEditUnit(type.id, unit.id)}>Save</Button>
+                        <Button variant="ghost" onclick={cancelEditUnit}>Cancel</Button>
+                      {:else}
+                        <span>{unit.label} ({unit.abbreviation})</span>
+                        <Button variant="ghost" onclick={() => startEditUnit(unit)}>Edit</Button>
+                        <Button variant="ghost" onclick={() => handleDeleteUnit(type.id, unit.id)}>Delete</Button>
+                      {/if}
+                    </li>
+                  {/each}
+                </ul>
+              {/if}
+
+              {#if unitError[type.id]}<p class="error">{unitError[type.id]}</p>{/if}
+              <form onsubmit={(e) => handleAddUnit(e, type.id)} class="form add-unit-form">
+                <input
+                  placeholder="Unit label (e.g. Centimeters)"
+                  value={draftFor(type.id).label}
+                  oninput={(e) => newUnitDrafts = { ...newUnitDrafts, [type.id]: { ...draftFor(type.id), label: e.target.value } }}
+                  required
+                />
+                <input
+                  placeholder="Abbreviation (e.g. cm)"
+                  class="abbr-input"
+                  value={draftFor(type.id).abbreviation}
+                  oninput={(e) => newUnitDrafts = { ...newUnitDrafts, [type.id]: { ...draftFor(type.id), abbreviation: e.target.value } }}
+                  required
+                />
+                <Button type="submit" variant="ghost">Add Unit</Button>
+              </form>
+            </div>
+          {/each}
+        </div>
+      {/if}
+    </section>
   {/if}
 </div>
 
@@ -131,4 +296,15 @@
     background: #ede9fe;
     color: #6d28d9;
   }
+  .type-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+  .type-group { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; }
+  .type-header { display: flex; align-items: center; gap: 0.5rem; }
+  .type-header h3 { margin: 0; font-size: 1rem; flex: 1; }
+  .type-header input { flex: 1; }
+  .unit-list { list-style: none; margin: 0.75rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  .unit-list li { display: flex; align-items: center; gap: 0.5rem; }
+  .unit-list li span { flex: 1; font-size: 0.9rem; }
+  .no-units { color: #9ca3af; font-size: 0.85rem; margin: 0.5rem 0; }
+  .abbr-input { max-width: 120px; }
+  .add-unit-form { margin-top: 0.5rem; }
 </style>

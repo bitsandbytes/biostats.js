@@ -8,7 +8,7 @@ export async function loadPeople() {
 
 export async function addPerson(data) {
   const p = await api.createPerson(data);
-  store.people.push(p);
+  store.people.push({ ...p, latestByType: {} });
 }
 
 export async function removePerson(id) {

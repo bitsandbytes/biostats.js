@@ -9,12 +9,27 @@ const people = [];
 const measurements = [];
 
 const measurementTypes = [
-  { type: 'height',      units: ['cm', 'in'] },
-  { type: 'weight',      units: ['kg', 'lb'] },
-  { type: 'temperature', units: ['°C', '°F'] },
-  { type: 'heart rate',  units: ['bpm'] },
-  { type: 'blood pressure systolic',  units: ['mmHg'] },
-  { type: 'blood pressure diastolic', units: ['mmHg'] },
+  { id: 'type-height', label: 'height', units: [
+      { id: 'unit-cm', label: 'Centimeters', abbreviation: 'cm' },
+      { id: 'unit-in', label: 'Inches', abbreviation: 'in' },
+    ] },
+  { id: 'type-weight', label: 'weight', units: [
+      { id: 'unit-kg', label: 'Kilograms', abbreviation: 'kg' },
+      { id: 'unit-lb', label: 'Pounds', abbreviation: 'lb' },
+    ] },
+  { id: 'type-temperature', label: 'temperature', units: [
+      { id: 'unit-c', label: 'Celsius', abbreviation: '°C' },
+      { id: 'unit-f', label: 'Fahrenheit', abbreviation: '°F' },
+    ] },
+  { id: 'type-heart-rate', label: 'heart rate', units: [
+      { id: 'unit-bpm', label: 'Beats per minute', abbreviation: 'bpm' },
+    ] },
+  { id: 'type-bp-systolic', label: 'blood pressure systolic', units: [
+      { id: 'unit-mmhg-sys', label: 'Millimeters of mercury', abbreviation: 'mmHg' },
+    ] },
+  { id: 'type-bp-diastolic', label: 'blood pressure diastolic', units: [
+      { id: 'unit-mmhg-dia', label: 'Millimeters of mercury', abbreviation: 'mmHg' },
+    ] },
 ];
 
 let sessionUserId = null;
@@ -163,6 +178,81 @@ export const handlers = [
     const denied = requireSession();
     if (denied) return denied;
     return HttpResponse.json(measurementTypes);
+  }),
+
+  http.post('/api/measurement-types', async ({ request }) => {
+    const denied = requireAdmin();
+    if (denied) return denied;
+    const { label } = await request.json();
+    if (measurementTypes.some(t => t.label === label)) {
+      return HttpResponse.json({ error: 'Conflict', message: 'A type with this label already exists.' }, { status: 409 });
+    }
+    const type = { id: uid(), label, units: [] };
+    measurementTypes.push(type);
+    return HttpResponse.json(type, { status: 201 });
+  }),
+
+  http.put('/api/measurement-types/:id', async ({ params, request }) => {
+    const denied = requireAdmin();
+    if (denied) return denied;
+    const type = measurementTypes.find(t => t.id === params.id);
+    if (!type) return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+    const { label } = await request.json();
+    if (measurementTypes.some(t => t.id !== params.id && t.label === label)) {
+      return HttpResponse.json({ error: 'Conflict', message: 'A type with this label already exists.' }, { status: 409 });
+    }
+    type.label = label;
+    return HttpResponse.json(type);
+  }),
+
+  http.delete('/api/measurement-types/:id', ({ params }) => {
+    const denied = requireAdmin();
+    if (denied) return denied;
+    const idx = measurementTypes.findIndex(t => t.id === params.id);
+    if (idx === -1) return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+    measurementTypes.splice(idx, 1);
+    return new HttpResponse(null, { status: 204 });
+  }),
+
+  http.post('/api/measurement-types/:id/units', async ({ params, request }) => {
+    const denied = requireAdmin();
+    if (denied) return denied;
+    const type = measurementTypes.find(t => t.id === params.id);
+    if (!type) return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+    const { label, abbreviation } = await request.json();
+    if (type.units.some(u => u.abbreviation === abbreviation)) {
+      return HttpResponse.json({ error: 'Conflict', message: 'This type already has a unit with this abbreviation.' }, { status: 409 });
+    }
+    const unit = { id: uid(), label, abbreviation };
+    type.units.push(unit);
+    return HttpResponse.json(unit, { status: 201 });
+  }),
+
+  http.put('/api/measurement-types/:id/units/:unitId', async ({ params, request }) => {
+    const denied = requireAdmin();
+    if (denied) return denied;
+    const type = measurementTypes.find(t => t.id === params.id);
+    if (!type) return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+    const unit = type.units.find(u => u.id === params.unitId);
+    if (!unit) return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+    const { label, abbreviation } = await request.json();
+    if (type.units.some(u => u.id !== params.unitId && u.abbreviation === abbreviation)) {
+      return HttpResponse.json({ error: 'Conflict', message: 'This type already has a unit with this abbreviation.' }, { status: 409 });
+    }
+    unit.label = label;
+    unit.abbreviation = abbreviation;
+    return HttpResponse.json(unit);
+  }),
+
+  http.delete('/api/measurement-types/:id/units/:unitId', ({ params }) => {
+    const denied = requireAdmin();
+    if (denied) return denied;
+    const type = measurementTypes.find(t => t.id === params.id);
+    if (!type) return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+    const idx = type.units.findIndex(u => u.id === params.unitId);
+    if (idx === -1) return HttpResponse.json({ error: 'Not found' }, { status: 404 });
+    type.units.splice(idx, 1);
+    return new HttpResponse(null, { status: 204 });
   }),
 
   // Import

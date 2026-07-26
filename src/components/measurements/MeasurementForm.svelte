@@ -1,49 +1,56 @@
 <script>
   import Button from '../ui/Button.svelte';
-  import { typeNames, suggestUnits } from '../../stores/measurementTypes.svelte.js';
+  import { store as measurementTypesStore } from '../../stores/measurementTypes.svelte.js';
   import { today } from '../../lib/format.js';
 
   let { onsubmit, submitting = false } = $props();
 
-  let type = $state('');
+  let unitId = $state('');
   let value = $state('');
-  let unit = $state('');
   let measured_at = $state(today());
 
-  let types = $derived(typeNames());
-  let unitOptions = $derived(suggestUnits(type));
+  let types = $derived(measurementTypesStore.types);
+
+  function findUnit(id) {
+    for (const type of types) {
+      const unit = type.units.find(u => u.id === id);
+      if (unit) return { type, unit };
+    }
+    return null;
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
-    await onsubmit({ type, value: Number(value), unit, measured_at });
-    type = '';
+    const found = findUnit(unitId);
+    if (!found) return;
+    await onsubmit({
+      type: found.type.label,
+      value: Number(value),
+      unit: found.unit.abbreviation,
+      measured_at,
+    });
+    unitId = '';
     value = '';
-    unit = '';
     measured_at = today();
   }
 </script>
 
 <form class="measurement-form" onsubmit={handleSubmit}>
   <div class="fields">
-    <div class="field">
-      <label for="mf-type">Type</label>
-      <select id="mf-type" bind:value={type} onchange={() => { unit = ''; }} required>
-        <option value="">Select type…</option>
-        {#each types as t}
-          <option value={t}>{t}</option>
-        {/each}
-      </select>
-    </div>
     <div class="field field-value">
       <label for="mf-value">Value</label>
       <input id="mf-value" type="number" step="any" bind:value required />
     </div>
     <div class="field">
       <label for="mf-unit">Unit</label>
-      <select id="mf-unit" bind:value={unit} required disabled={!type}>
+      <select id="mf-unit" bind:value={unitId} required>
         <option value="">Select unit…</option>
-        {#each unitOptions as u}
-          <option value={u}>{u}</option>
+        {#each types as type (type.id)}
+          <optgroup label={type.label}>
+            {#each type.units as unit (unit.id)}
+              <option value={unit.id}>{unit.label} ({unit.abbreviation})</option>
+            {/each}
+          </optgroup>
         {/each}
       </select>
     </div>
@@ -52,7 +59,7 @@
       <input id="mf-date" type="date" bind:value={measured_at} required />
     </div>
   </div>
-  <Button type="submit" disabled={submitting || !type || !value || !unit || !measured_at}>
+  <Button type="submit" disabled={submitting || !unitId || !value || !measured_at}>
     {submitting ? 'Saving…' : 'Add'}
   </Button>
 </form>
@@ -94,10 +101,5 @@
     border-radius: 6px;
     font-size: 0.9rem;
     background: white;
-  }
-  select:disabled {
-    background: #f3f4f6;
-    color: #9ca3af;
-    cursor: not-allowed;
   }
 </style>

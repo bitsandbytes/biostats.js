@@ -1,4 +1,5 @@
-const BASE = import.meta.env.VITE_API_BASE_URL;
+const envBase = import.meta.env.VITE_API_BASE_URL;
+const BASE = envBase === 'mock' ? '' : envBase;
 
 async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
@@ -24,6 +25,14 @@ export const addMeasurement         = (id, data)   => request('POST',   `/api/pe
 export const deleteMeasurement      = (id, eid)    => request('DELETE', `/api/people/${id}/measurements/${eid}`);
 
 export const getMeasurementTypes    = ()           => request('GET',    '/api/measurement-types');
+export const createMeasurementType  = (data)       => request('POST',   '/api/measurement-types', data);
+export const updateMeasurementType  = (id, data)   => request('PUT',    `/api/measurement-types/${id}`, data);
+export const deleteMeasurementType  = (id)         => request('DELETE', `/api/measurement-types/${id}`);
+
+export const createUnit             = (typeId, data)       => request('POST',   `/api/measurement-types/${typeId}/units`, data);
+export const updateUnit             = (typeId, unitId, data) => request('PUT',  `/api/measurement-types/${typeId}/units/${unitId}`, data);
+export const deleteUnit             = (typeId, unitId)      => request('DELETE', `/api/measurement-types/${typeId}/units/${unitId}`);
+
 export const importData             = (payload)    => request('POST',   '/api/import', payload);
 
 export const getUsers               = ()           => request('GET',    '/api/users');

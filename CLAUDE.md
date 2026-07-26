@@ -26,7 +26,7 @@ Svelte 5 runes-based state, exported from `.svelte.js` modules:
 
 - **`auth.svelte.js`** — `auth.session` (`null | { id, email }`). Mutated by `initSession()`, `login()`, `logout()`.
 - **`people.svelte.js`** — `PersonSummary[]` for the Dashboard. `addMeasurement()` updates `latestByType` in place without a re-fetch.
-- **`measurementTypes.svelte.js`** — `TypeSuggestion[]` used for autocomplete. `suggestUnits(typeName)` returns known units for a type.
+- **`measurementTypes.svelte.js`** — `store.types`: `MeasurementType[]` (`{ id, label, units: [{ id, label, abbreviation }] }`), admin-managed. Exposes CRUD helpers (`createType`, `renameType`, `removeType`, `addUnit`, `renameUnit`, `removeUnit`) that call the API and mutate the store in place.
 
 Per-person measurement history is **not** in global state — it is fetched on demand and held in local component state inside `PersonDetail.svelte`.
 
@@ -41,13 +41,13 @@ Single `request(method, path, body)` helper. All calls use `credentials: 'includ
 | `/` | `Dashboard.svelte` | `PersonCard` grid; inline quick-add form per card |
 | `/person/:id` | `PersonDetail.svelte` | Full measurement history, `TrendChart`, delete person |
 | `/import` | `Import.svelte` | CSV bulk import with column mapper |
-| `/admin` | `Admin.svelte` | User management (create/delete) |
+| `/admin` | `Admin.svelte` | User management (create/delete); Measurement Types management (create/rename/delete type, create/edit/delete unit) |
 
 ### Key components
 
-- **`MeasurementForm`** — used in both Dashboard (inline) and PersonDetail. Type and unit fields are `AutocompleteInput` drawing from the `measurementTypes` store; unit suggestions update when type changes.
+- **`MeasurementForm`** — used in both Dashboard (inline) and PersonDetail. Single `<select>` for unit, sourced from the `measurementTypes` store and grouped by type via `<optgroup>` (option text: `"<unit label> (<abbreviation>)"`). There is no separate type field — picking a unit sets the measurement's `type` to the parent type's label and `unit` to the chosen unit's abbreviation.
 - **`TrendChart`** — D3 multi-line chart, time x-axis, one series per measurement type. Types with different units get separate y-axes (up to two); beyond two collapses to a normalized view.
-- **`AutocompleteInput`** — free-text input with dropdown suggestions; used for both type and unit fields.
+- **`AutocompleteInput`** — unused free-text input with dropdown suggestions, kept in `src/components/ui/` in case free-text entry is needed elsewhere (e.g. Import column mapper).
 
 ### Utilities (`src/lib/`)
 
@@ -61,4 +61,4 @@ MSW (`msw` devDependency) intercepts `/api/*` fetch calls in the browser. Define
 
 ## Data Model
 
-**Users** log in; **People** are subjects being tracked (no login). Measurements have a free-text `type` (e.g. `"height"`) and `unit` (e.g. `"cm"`). `latestByType` on `PersonSummary` is a map from type string to the most recent measurement value/unit/date for that type.
+**Users** log in; **People** are subjects being tracked (no login). Measurements have a free-text `type` (e.g. `"height"`) and `unit` (e.g. `"cm"`), copied at entry time from an admin-managed `MeasurementType.label` and `Unit.abbreviation`. `latestByType` on `PersonSummary` is a map from type string to the most recent measurement value/unit/date for that type.

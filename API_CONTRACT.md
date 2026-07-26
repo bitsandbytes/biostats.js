@@ -200,27 +200,139 @@ Delete a single measurement.
 
 ## Measurement Types
 
+A measurement type is just a label (e.g. `"height"`). Units belong to exactly one type (e.g. `"cm"` and `"in"` belong to `"height"`) and each have their own label and abbreviation (e.g. label `"Centimeters"`, abbreviation `"cm"`). `MeasurementForm` renders a single unit `<select>` grouped by type (`<optgroup>` per type), displaying `"<label> (<abbreviation>)"` per option; picking a unit determines the measurement's `type` (the parent type's label) and `unit` (the chosen unit's abbreviation).
+
 ### `GET /api/measurement-types`
 
-Return all predefined measurement type+unit combinations managed in the database. Used to populate the type and unit dropdowns in `MeasurementForm`. Selecting a type on the frontend filters the unit list to only the units valid for that type.
+Return all measurement types with their nested units. Used to populate the grouped unit dropdown in `MeasurementForm` and to render the "Measurement Types" admin section.
 
 - **Auth required:** Yes
-- **Response `200`:** `TypeSuggestion[]`
+- **Response `200`:** `MeasurementType[]`
   ```json
   [
     {
-      "type": "string",
-      "units": ["string"]
+      "id": "uuid",
+      "label": "string",
+      "units": [
+        { "id": "uuid", "label": "string", "abbreviation": "string" }
+      ]
     }
   ]
   ```
   Example:
   ```json
   [
-    { "type": "height", "units": ["cm", "in"] },
-    { "type": "weight", "units": ["kg", "lb"] }
+    {
+      "id": "type-1",
+      "label": "height",
+      "units": [
+        { "id": "unit-1", "label": "Centimeters", "abbreviation": "cm" },
+        { "id": "unit-2", "label": "Inches", "abbreviation": "in" }
+      ]
+    },
+    {
+      "id": "type-2",
+      "label": "weight",
+      "units": [
+        { "id": "unit-3", "label": "Kilograms", "abbreviation": "kg" },
+        { "id": "unit-4", "label": "Pounds", "abbreviation": "lb" }
+      ]
+    }
   ]
   ```
+
+---
+
+### `POST /api/measurement-types`
+
+Create a new measurement type.
+
+- **Auth required:** Yes (`ROLE_ADMIN`)
+- **Request body:**
+  ```json
+  { "label": "string" }
+  ```
+- **Response `201`:** `MeasurementType` (`units: []`)
+- **Response `403`** if the authenticated user is not an admin.
+- **Response `409`** if a type with this label already exists.
+
+---
+
+### `PUT /api/measurement-types/:id`
+
+Rename a measurement type.
+
+- **Auth required:** Yes (`ROLE_ADMIN`)
+- **Path parameter:** `id` — measurement type UUID
+- **Request body:**
+  ```json
+  { "label": "string" }
+  ```
+- **Response `200`:** `MeasurementType`
+- **Response `403`** if the authenticated user is not an admin.
+- **Response `404`** if the type is not found.
+- **Response `409`** if another type already has this label.
+
+---
+
+### `DELETE /api/measurement-types/:id`
+
+Delete a measurement type and cascade-delete its units. Existing `Measurement` rows already recorded with this type's label are untouched (they keep their free-text `type`/`unit` values regardless of later admin changes).
+
+- **Auth required:** Yes (`ROLE_ADMIN`)
+- **Path parameter:** `id` — measurement type UUID
+- **Response:** `204 No Content`
+- **Response `403`** if the authenticated user is not an admin.
+- **Response `404`** if the type is not found.
+
+---
+
+### `POST /api/measurement-types/:id/units`
+
+Add a unit to a measurement type.
+
+- **Auth required:** Yes (`ROLE_ADMIN`)
+- **Path parameter:** `id` — measurement type UUID
+- **Request body:**
+  ```json
+  { "label": "string", "abbreviation": "string" }
+  ```
+- **Response `201`:** `Unit`
+  ```json
+  { "id": "uuid", "label": "string", "abbreviation": "string" }
+  ```
+- **Response `403`** if the authenticated user is not an admin.
+- **Response `404`** if the type is not found.
+- **Response `409`** if the type already has a unit with this abbreviation.
+
+---
+
+### `PUT /api/measurement-types/:id/units/:unitId`
+
+Update a unit's label or abbreviation.
+
+- **Auth required:** Yes (`ROLE_ADMIN`)
+- **Path parameters:** `id` — measurement type UUID, `unitId` — unit UUID
+- **Request body:**
+  ```json
+  { "label": "string", "abbreviation": "string" }
+  ```
+- **Response `200`:** `Unit`
+- **Response `403`** if the authenticated user is not an admin.
+- **Response `404`** if the type or unit is not found.
+- **Response `409`** if the type already has another unit with this abbreviation.
+
+---
+
+### `DELETE /api/measurement-types/:id/units/:unitId`
+
+Delete a unit.
+
+- **Auth required:** Yes (`ROLE_ADMIN`)
+- **Path parameters:** `id` — measurement type UUID, `unitId` — unit UUID
+- **Response:** `204 No Content`
+- **Response `403`** if the authenticated user is not an admin.
+- **Response `404`** if the type or unit is not found.
 
 ---
 
@@ -337,9 +449,9 @@ Person
 Measurement
   id          uuid
   person_id   → Person.id
-  type        string   free text, e.g. "height", "weight"
+  type        string   free text, copied from MeasurementType.label at entry time, e.g. "height", "weight"
   value       number
-  unit        string   free text, e.g. "cm", "in", "kg", "lb"
+  unit        string   free text, copied from Unit.abbreviation at entry time, e.g. "cm", "in", "kg", "lb"
   measured_at YYYY-MM-DD date string
   created_at  ISO 8601 timestamp
 
@@ -354,9 +466,15 @@ PersonDetail
   notes         string (optional)
   measurements  Measurement[]  sorted by measured_at desc
 
-TypeSuggestion
-  type   string
-  units  string[]
+MeasurementType
+  id     uuid
+  label  string (unique)
+  units  Unit[]
+
+Unit
+  id           uuid
+  label        string          e.g. "Centimeters"
+  abbreviation string          e.g. "cm" — unique within its parent type
 ```
 
 ---

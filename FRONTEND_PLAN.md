@@ -19,7 +19,9 @@ All routes and components are implemented and working against a real backend (vi
 - PersonDetail — full measurement history, sortable table, D3 trend chart, delete person with confirmation
 - Import — CSV parse, column mapper, preview, bulk POST
 - Admin — user list, create user, delete user
-- `GET /api/measurement-types` — returns predefined types+units from the database; `MeasurementForm` uses `<select>` dropdowns (type, then unit filtered to that type)
+- `GET /api/measurement-types` — returns measurement types with nested units (`{ id, label, units: [{ id, label, abbreviation }] }`)
+- Measurement types + units are now full admin CRUD: `Admin.svelte` has a "Measurement Types" section (add/rename/delete type, add/edit/delete unit per type), backed by `POST|PUT|DELETE /api/measurement-types[/:id]` and `POST|PUT|DELETE /api/measurement-types/:id/units[/:unitId]`
+- `MeasurementForm` now has a single `<select>` for unit, grouped by type via `<optgroup>`, displaying `"<label> (<abbreviation>)"`; picking a unit sets both the measurement's `type` (parent type's label) and `unit` (abbreviation) — there is no separate type field anymore
 - Dev setup: Vite proxy to `https://localhost:8443` with `secure: false`; MSW activated by `VITE_API_BASE_URL=mock`
 - Svelte 5 compatibility: all components use runes (`$props`, `$state`, `$derived`, `$effect`, `{@render}`), no Svelte 4 idioms remaining
 - Favicon wired up (`public/` + `<link>` tags in `index.html`)
@@ -30,37 +32,21 @@ Nothing actively in progress.
 
 ### Next Step to Pick Up From
 
-**Manage measurement types in the Admin UI.** Types are now database-defined but there is no frontend interface to create, edit, or delete them. The natural next step is to add a "Measurement Types" section to `Admin.svelte` with:
-- A list of existing types and their units
-- A form to add a new type (name + initial units)
-- Ability to add/remove units on an existing type
-- Delete a type
-
-This requires two new API endpoints (see "Unresolved / Needs Decision" below).
+Nothing queued. Pick from "Unresolved / Needs Decision" below or `Known Technical Debt`.
 
 ---
 
 ## Unresolved / Needs Decision
 
-**1. Measurement types CRUD API — backend needs to implement:**
-
-The frontend now treats `GET /api/measurement-types` as returning predefined database rows, not data derived from measurements. The backend needs:
-- A `measurement_types` table (or equivalent) with `type` string and `units` string[]
-- `POST /api/measurement-types` — create a type with initial units
-- `PUT /api/measurement-types/:type` — update units for a type (or use finer-grained add/remove unit endpoints)
-- `DELETE /api/measurement-types/:type` — remove a type
-
-These endpoints are not yet in `API_CONTRACT.md`. Before implementing the Admin UI section, define and add them there first.
-
-**2. Free-text measurements via Import — type/unit validation:**
+**1. Free-text measurements via Import — type/unit validation:**
 
 `POST /api/import` rows contain free-text `type` and `unit` strings. Now that types are predefined, the backend needs a policy: reject rows whose type/unit combination isn't in the `measurement_types` table, or silently accept them? The frontend import UI doesn't validate this yet either.
 
-**3. `svelte-routing` is a Svelte 4 library:**
+**2. `svelte-routing` is a Svelte 4 library:**
 
 We worked around the Svelte 4/5 interop issue (anchor node incompatibility) by switching from the `component={}` prop to the children pattern in `App.svelte`. The `let:params` slot-prop syntax on the PersonDetail route is also Svelte 4. This is stable but not idiomatic Svelte 5. Replacing `svelte-routing` with a Svelte 5-native router would eliminate the technical debt, but is not urgent.
 
-**4. `AutocompleteInput` is now unused:**
+**3. `AutocompleteInput` is now unused:**
 
 `MeasurementForm` was the only consumer of `AutocompleteInput.svelte`. It's still in `src/components/ui/`. Either remove it or keep it if free-text type entry will be needed elsewhere (e.g. Import column mapper).
 
@@ -83,15 +69,21 @@ Person
 Measurement
   id          uuid
   person_id   → Person.id
-  type        string   (references a MeasurementType)
+  type        string   free text, copied from MeasurementType.label at entry time
   value       number
-  unit        string   (one of the units defined for that type)
+  unit        string   free text, copied from Unit.abbreviation at entry time
   measured_at date
   created_at  timestamp
 
-MeasurementType           ← new, database-defined
-  type        string (unique)
-  units       string[]
+MeasurementType           ← database-defined, admin-managed
+  id          uuid
+  label       string (unique)
+  units       Unit[]
+
+Unit                      ← belongs to exactly one MeasurementType
+  id            uuid
+  label         string     e.g. "Centimeters"
+  abbreviation  string     e.g. "cm" (unique within its parent type)
 ```
 
 ---
@@ -131,10 +123,13 @@ See `API_CONTRACT.md` for the full contract. Summary:
 ### Measurement Types
 | Method | Path | Response |
 |---|---|---|
-| `GET` | `/api/measurement-types` | `TypeSuggestion[]` — predefined, database-managed |
-| *(pending)* `POST` | `/api/measurement-types` | `TypeSuggestion` |
-| *(pending)* `PUT` | `/api/measurement-types/:type` | `TypeSuggestion` |
-| *(pending)* `DELETE` | `/api/measurement-types/:type` | `204` |
+| `GET` | `/api/measurement-types` | `MeasurementType[]` — nested units, database-managed |
+| `POST` | `/api/measurement-types` | `MeasurementType` (admin) |
+| `PUT` | `/api/measurement-types/:id` | `MeasurementType` (admin) |
+| `DELETE` | `/api/measurement-types/:id` | `204` (admin, cascades units) |
+| `POST` | `/api/measurement-types/:id/units` | `Unit` (admin) |
+| `PUT` | `/api/measurement-types/:id/units/:unitId` | `Unit` (admin) |
+| `DELETE` | `/api/measurement-types/:id/units/:unitId` | `204` (admin) |
 
 ### Import
 | Method | Path | Response |
@@ -211,6 +206,6 @@ src/
 
 ## Known Technical Debt
 
-- `svelte-routing` is Svelte 4; worked around but not replaced (see Unresolved #3)
+- `svelte-routing` is Svelte 4; worked around but not replaced (see Unresolved #2)
 - `let:params` on the PersonDetail `<Route>` is Svelte 4 slot-prop syntax, required by svelte-routing
 - `TrendChart` uses a single y-axis; CLAUDE.md specifies dual y-axes for different units and a normalized fallback for >2 — not yet implemented
