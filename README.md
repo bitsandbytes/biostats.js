@@ -1,0 +1,48 @@
+# biostats.js
+
+A Svelte 5 + Vite single-page app for tracking biometric measurements (height, weight, etc.) for a set of people, with CSV bulk import and trend charts.
+
+## Requirements
+
+- Node.js (with npm)
+- A running instance of the Java/Spring Boot backend (see `API_CONTRACT.md`), or use the built-in mock server for frontend-only development
+
+## Setup
+
+```bash
+npm install
+```
+
+Create a `.env.local` file to point the app at your backend:
+
+```
+VITE_API_BASE_URL=http://localhost:8080
+```
+
+To develop without a backend, set `VITE_API_BASE_URL=` (empty) to use the MSW mock handlers in `src/mocks/handlers.js` instead.
+
+## Commands
+
+```bash
+npm run dev      # Start dev server (Vite HMR)
+npm run build    # Production build
+npm run preview  # Preview production build
+```
+
+## Architecture
+
+See `CLAUDE.md` for a detailed overview of the app's structure, stores, and API layer.
+
+## CSV Import
+
+The `/import` route (`src/routes/Import.svelte`) lets you bulk-import measurements from a CSV file.
+
+- The file must have a header row.
+- Your columns can be named anything — the Import page lets you map each of your CSV's headers to the required fields below.
+- Required fields:
+  - `name` — the person's name
+  - `type` — measurement type (e.g. `height`)
+  - `value` — numeric measurement value
+  - `unit` — unit abbreviation (e.g. `cm`)
+  - `date` — when the measurement was taken
+- All five fields must be mapped before the import can be submitted. A preview of the first 10 parsed rows is shown before you import.

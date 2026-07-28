@@ -25,6 +25,7 @@ All routes and components are implemented and working against a real backend (vi
 - Dev setup: Vite proxy to `https://localhost:8443` with `secure: false`; MSW activated by `VITE_API_BASE_URL=mock`
 - Svelte 5 compatibility: all components use runes (`$props`, `$state`, `$derived`, `$effect`, `{@render}`), no Svelte 4 idioms remaining
 - Favicon wired up (`public/` + `<link>` tags in `index.html`)
+- `README.md` added (setup, commands, CSV import field requirements)
 
 ### In Progress
 
@@ -32,7 +33,8 @@ Nothing actively in progress.
 
 ### Next Step to Pick Up From
 
-Nothing queued. Pick from "Unresolved / Needs Decision" below or `Known Technical Debt`.
+1. Change the page title to "bioStats" — currently `<title>Hello Svelte</title>` in `index.html`, needs to become `<title>bioStats</title>`
+2. On the Import page (`src/routes/Import.svelte`), move the `{#if error}` block (currently above the mapping/preview sections, lines ~58-60) to render directly above the "Import X rows" `<Button>` at the bottom, so a failed import's error is immediately visible without scrolling up
 
 ---
 
@@ -49,6 +51,15 @@ We worked around the Svelte 4/5 interop issue (anchor node incompatibility) by s
 **3. `AutocompleteInput` is now unused:**
 
 `MeasurementForm` was the only consumer of `AutocompleteInput.svelte`. It's still in `src/components/ui/`. Either remove it or keep it if free-text type entry will be needed elsewhere (e.g. Import column mapper).
+
+**4. Containerize the frontend for testing and eventual production:**
+
+The backend already builds to a Docker image; the frontend does not yet. Plan:
+- Add a multi-stage `Dockerfile` — build stage (`node`, `npm ci && npm run build`) producing `dist/`, then a slim static-serving stage (nginx or similar) that copies `dist/` in.
+- Decide same-origin vs. split-origin serving before writing the nginx config: if `/api/*` is proxied to the Spring Boot container from the same nginx (path-based routing), cookie/CORS behavior matches today's Vite-proxy dev setup and needs no `credentials`/`SameSite` changes. If frontend and backend are exposed on different origins, CORS + `SameSite=None; Secure` cookie config becomes required on the backend.
+- Add a `docker-compose.yml` (frontend + backend containers) for local integration testing — this is the first milestone, ahead of any production hosting decision.
+- Confirm `VITE_API_BASE_URL` build-time behavior inside the container (baked in at build time vs. runtime env substitution — Vite env vars are compile-time, so a runtime-configurable API base URL needs an entrypoint script that writes a small config file/`window.__ENV__` before nginx starts).
+- Production hosting choice (split static/CDN vs. bundled container) is a later decision — see CLAUDE.md discussion; not blocking the containerization work itself.
 
 ---
 
