@@ -46,3 +46,4 @@ The `/import` route (`src/routes/Import.svelte`) lets you bulk-import measuremen
   - `unit` — unit abbreviation (e.g. `cm`)
   - `date` — when the measurement was taken
 - All five fields must be mapped before the import can be submitted. A preview of the first 10 parsed rows is shown before you import.
+- `type` and `unit` values don't need to already exist — unknown ones are created automatically (matched case-insensitively, so `Height` and `height` are treated as the same type). Any newly created types/units are listed after the import completes.

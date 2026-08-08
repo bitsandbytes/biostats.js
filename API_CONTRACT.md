@@ -358,15 +358,40 @@ Bulk-import measurements from a parsed CSV. The backend upserts persons by name 
   }
   ```
   Each row corresponds to one measurement for a named person. All fields are required per row.
+
+  A row's `type` and `unit` do not need to already exist as a `MeasurementType`/`Unit` — see **Auto-creation of types and units** below.
+
 - **Response `200`:**
   ```json
   {
     "created": 0,
     "skipped": 0,
-    "errors": 0
+    "errors": 0,
+    "createdTypes": [
+      { "id": "uuid", "label": "string" }
+    ],
+    "createdUnits": [
+      {
+        "id": "uuid",
+        "label": "string",
+        "abbreviation": "string",
+        "typeId": "uuid",
+        "typeLabel": "string"
+      }
+    ]
   }
   ```
-  `created` — rows successfully inserted. `skipped` — rows that were duplicates or otherwise not inserted. `errors` — rows that failed validation or processing.
+  `created` — rows successfully inserted. `skipped` — rows that were duplicates or otherwise not inserted. `errors` — rows that failed validation or processing. `createdTypes` / `createdUnits` — the `MeasurementType`s and `Unit`s newly created *by this import call* (see below). Each appears at most once, even if matched by multiple rows. Omit or return empty arrays when nothing new was created.
+
+#### Auto-creation of types and units
+
+For each row, `type` and `unit` are resolved against existing `MeasurementType.label` / `Unit.abbreviation` **case-insensitively** (trim whitespace, then compare ignoring case), so `"Height"` and `"height"` resolve to the same type:
+
+1. Look up a `MeasurementType` whose `label` matches the row's `type` (case-insensitive). If none exists, create one with `label` set to the row's `type` value as given (trimmed). That row is now the canonical casing for this type going forward.
+2. Within that type, look up a `Unit` whose `abbreviation` matches the row's `unit` (case-insensitive). If none exists, create one with `abbreviation` set to the row's `unit` value as given (trimmed) and `label` set to that same value — the CSV has no separate unit label, so it's reused as a placeholder. Admins can rename it afterward in the Measurement Types admin section.
+3. The `Measurement.type` / `Measurement.unit` actually stored on the row are the **canonical** resolved `label` / `abbreviation` (from step 1/2), not necessarily byte-identical to the CSV cell — this keeps `latestByType` keys consistent regardless of the casing used in any one import.
+
+This auto-creation happens regardless of whether the importing user is an admin — `POST /api/import` itself is not admin-gated (unlike `POST /api/measurement-types` and `POST /api/measurement-types/:id/units`), and there's no way to pause mid-import for admin approval of a new type.
 
 ---
 

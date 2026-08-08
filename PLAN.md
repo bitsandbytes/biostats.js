@@ -28,6 +28,7 @@ All routes and components are implemented and working against a real backend (vi
 - `README.md` added (setup, commands, CSV import field requirements)
 - Page title changed to "bioStats" (`index.html`)
 - On the Import page (`src/routes/Import.svelte`), the `{#if error}` block now renders directly above the "Import X rows" `<Button>` at the bottom, so a failed import's error is immediately visible without scrolling up
+- Import auto-creates unknown `MeasurementType`/`Unit` rows instead of rejecting or silently passing through free text — matching is case-insensitive (trim + lowercase compare) so `"Height"`/`"height"` resolve to one type. `POST /api/import` now returns `createdTypes`/`createdUnits` alongside `{ created, skipped, errors }`; `Import.svelte` displays them and refreshes the `measurementTypes` store when either is non-empty. Resolution logic lives in `src/mocks/importResolve.js` (unit-tested) and is called from the MSW `/api/import` handler; the real backend needs to implement the same rules — see `API_CONTRACT.md`
 
 ### In Progress
 
@@ -41,12 +42,9 @@ Pick from the Unresolved / Needs Decision items below — none are blocking, so 
 
 ## Unresolved / Needs Decision
 
-**1. Free-text measurements via Import — type/unit validation:**
+**1. Import response has no per-row detail:**
 
-Two sources of truth conflict: `MeasurementForm` constrains entry to admin-defined `MeasurementType`/`Unit` pairs via a `<select>`, but `Import.svelte` / `csv.js` (`applyMapping`) copy the CSV's `type` and `unit` columns verbatim into the `POST /api/import` payload — no lookup against the `measurementTypes` store, no rejection of typos or unknown values. Needs decisions:
-- Backend: reject rows whose type/unit combo isn't in `measurement_types`, silently accept as free text, or auto-create matching `MeasurementType`/`Unit` rows?
-- Frontend: should the column mapper cross-check CSV `type`/`unit` values against the `measurementTypes` store before submit, mirroring `MeasurementForm`'s constraint?
-- `{ created, skipped, errors }` response has no per-row detail — if the backend starts rejecting invalid type/unit combos, `skipped: 4` won't tell the user which rows or why. May need a richer response shape (e.g. per-row error messages) once a rejection policy is chosen.
+`{ created, skipped, errors }` (now also `createdTypes`/`createdUnits`) reports counts/summaries only — if a row fails validation, nothing tells the user which row or why. May need a richer response shape (e.g. per-row error messages) if this becomes a problem in practice.
 
 **2. `svelte-routing` is a Svelte 4 library:**
 
@@ -149,7 +147,7 @@ See `API_CONTRACT.md` for the full contract. Summary:
 ### Import
 | Method | Path | Response |
 |---|---|---|
-| `POST` | `/api/import` | `{ created, skipped, errors }` |
+| `POST` | `/api/import` | `{ created, skipped, errors, createdTypes, createdUnits }` — auto-creates unknown types/units (case-insensitive match) |
 
 ---
 
@@ -214,7 +212,8 @@ src/
 │
 └── mocks/
     ├── browser.js
-    └── handlers.js                # MSW — predefined measurementTypes seed data
+    ├── handlers.js                # MSW — predefined measurementTypes seed data
+    └── importResolve.js           # case-insensitive type/unit lookup + auto-create, used by the /api/import handler
 ```
 
 ---

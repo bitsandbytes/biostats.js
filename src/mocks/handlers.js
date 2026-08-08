@@ -1,4 +1,5 @@
 import { http, HttpResponse } from 'msw';
+import { resolveTypeAndUnit } from './importResolve.js';
 
 // --- seed data ---
 const users = [
@@ -260,8 +261,9 @@ export const handlers = [
     const denied = requireSession();
     if (denied) return denied;
     const { rows } = await request.json();
-    let created = 0, skipped = 0;
-    const errors = [];
+    let created = 0, skipped = 0, errors = 0;
+    const createdTypes = [];
+    const createdUnits = [];
     for (const row of rows) {
       try {
         let person = people.find(p => p.name === row.name);
@@ -269,21 +271,25 @@ export const handlers = [
           person = { id: uid(), name: row.name, notes: '', created_at: new Date().toISOString() };
           people.push(person);
         }
+        const { type, unit, created: newlyCreated } = resolveTypeAndUnit(
+          measurementTypes, row.type, row.unit, uid
+        );
+        if (newlyCreated.type) createdTypes.push(newlyCreated.type);
+        if (newlyCreated.unit) createdUnits.push(newlyCreated.unit);
         measurements.push({
           id: uid(),
           person_id: person.id,
-          type: row.type,
+          type: type.label,
           value: row.value,
-          unit: row.unit,
+          unit: unit.abbreviation,
           measured_at: row.measured_at,
           created_at: new Date().toISOString(),
         });
         created++;
-      } catch (e) {
-        skipped++;
-        errors.push(String(e));
+      } catch {
+        errors++;
       }
     }
-    return HttpResponse.json({ created, skipped, errors });
+    return HttpResponse.json({ created, skipped, errors, createdTypes, createdUnits });
   }),
 ];

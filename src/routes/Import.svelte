@@ -2,6 +2,7 @@
   import Button from '../components/ui/Button.svelte';
   import * as api from '../lib/api.js';
   import { parseCsv, applyMapping, REQUIRED_COLUMNS } from '../lib/csv.js';
+  import { loadTypes } from '../stores/measurementTypes.svelte.js';
 
   let columns = $state([]);
   let rows = $state([]);
@@ -39,6 +40,9 @@
     try {
       const mapped = applyMapping(rows, mapping);
       result = await api.importData({ rows: mapped });
+      if (result.createdTypes?.length || result.createdUnits?.length) {
+        await loadTypes();
+      }
     } catch (err) {
       error = err?.message ?? 'Import failed.';
     } finally {
@@ -58,6 +62,18 @@
   {#if result}
     <div class="result">
       <p>Import complete: {result.created} created, {result.skipped} skipped, {result.errors} errors.</p>
+      {#if result.createdTypes?.length}
+        <p class="note">
+          New measurement type{result.createdTypes.length > 1 ? 's' : ''} created:
+          {result.createdTypes.map(t => t.label).join(', ')}
+        </p>
+      {/if}
+      {#if result.createdUnits?.length}
+        <p class="note">
+          New unit{result.createdUnits.length > 1 ? 's' : ''} created:
+          {result.createdUnits.map(u => `${u.label} (${u.abbreviation}) under ${u.typeLabel}`).join(', ')}
+        </p>
+      {/if}
     </div>
   {/if}
 
@@ -136,6 +152,8 @@
   label { font-weight: 500; cursor: pointer; }
   .error { color: #dc2626; font-size: 0.875rem; margin: 0; }
   .result { background: #d1fae5; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.9rem; }
+  .result p { margin: 0; }
+  .result .note { margin-top: 0.5rem; color: #065f46; }
   section {
     background: white;
     border: 1px solid #e5e7eb;
