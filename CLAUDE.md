@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## API Change Workflow
+
+When changing anything under `src/`:
+1. Write/update tests first, before touching implementation
+2. Implement the change
+3. Add docstrings/comments — enough for someone new to understand each file and any non-trivial function
+4. Run the test suite and confirm it passes before saying you're done
+5. Update README.md if endpoints or behavior changed
+6. Update PLAN.md to reflect scope completed/remaining
+
 ## Commands
 
 ```bash
