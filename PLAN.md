@@ -26,6 +26,8 @@ All routes and components are implemented and working against a real backend (vi
 - Svelte 5 compatibility: all components use runes (`$props`, `$state`, `$derived`, `$effect`, `{@render}`), no Svelte 4 idioms remaining
 - Favicon wired up (`public/` + `<link>` tags in `index.html`)
 - `README.md` added (setup, commands, CSV import field requirements)
+- Page title changed to "bioStats" (`index.html`)
+- On the Import page (`src/routes/Import.svelte`), the `{#if error}` block now renders directly above the "Import X rows" `<Button>` at the bottom, so a failed import's error is immediately visible without scrolling up
 
 ### In Progress
 
@@ -33,8 +35,7 @@ Nothing actively in progress.
 
 ### Next Step to Pick Up From
 
-1. Change the page title to "bioStats" — currently `<title>Hello Svelte</title>` in `index.html`, needs to become `<title>bioStats</title>`
-2. On the Import page (`src/routes/Import.svelte`), move the `{#if error}` block (currently above the mapping/preview sections, lines ~58-60) to render directly above the "Import X rows" `<Button>` at the bottom, so a failed import's error is immediately visible without scrolling up
+Pick from the Unresolved / Needs Decision items below — none are blocking, so ask the user which to prioritize (e.g. import validation policy, `svelte-routing` replacement, or containerization).
 
 ---
 
@@ -42,7 +43,10 @@ Nothing actively in progress.
 
 **1. Free-text measurements via Import — type/unit validation:**
 
-`POST /api/import` rows contain free-text `type` and `unit` strings. Now that types are predefined, the backend needs a policy: reject rows whose type/unit combination isn't in the `measurement_types` table, or silently accept them? The frontend import UI doesn't validate this yet either.
+Two sources of truth conflict: `MeasurementForm` constrains entry to admin-defined `MeasurementType`/`Unit` pairs via a `<select>`, but `Import.svelte` / `csv.js` (`applyMapping`) copy the CSV's `type` and `unit` columns verbatim into the `POST /api/import` payload — no lookup against the `measurementTypes` store, no rejection of typos or unknown values. Needs decisions:
+- Backend: reject rows whose type/unit combo isn't in `measurement_types`, silently accept as free text, or auto-create matching `MeasurementType`/`Unit` rows?
+- Frontend: should the column mapper cross-check CSV `type`/`unit` values against the `measurementTypes` store before submit, mirroring `MeasurementForm`'s constraint?
+- `{ created, skipped, errors }` response has no per-row detail — if the backend starts rejecting invalid type/unit combos, `skipped: 4` won't tell the user which rows or why. May need a richer response shape (e.g. per-row error messages) once a rejection policy is chosen.
 
 **2. `svelte-routing` is a Svelte 4 library:**
 

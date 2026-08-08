@@ -55,10 +55,6 @@
     <input id="csv-file" type="file" accept=".csv" onchange={handleFile} />
   </div>
 
-  {#if error}
-    <p class="error">{error}</p>
-  {/if}
-
   {#if result}
     <div class="result">
       <p>Import complete: {result.created} created, {result.skipped} skipped, {result.errors} errors.</p>
@@ -107,6 +103,10 @@
         </table>
       </div>
     </section>
+
+    {#if error}
+      <p class="error">{error}</p>
+    {/if}
 
     <Button disabled={!mappingComplete || submitting} onclick={handleImport}>
       {submitting ? 'Importing…' : `Import ${rows.length} rows`}
