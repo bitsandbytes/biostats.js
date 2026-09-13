@@ -16,7 +16,7 @@ const measurementTypes = [
     ] },
   { id: 'type-weight', label: 'weight', units: [
       { id: 'unit-kg', label: 'Kilograms', abbreviation: 'kg' },
-      { id: 'unit-lb', label: 'Pounds', abbreviation: 'lb' },
+      { id: 'unit-lb', label: 'Pounds', abbreviation: 'lbs' },
     ] },
   { id: 'type-temperature', label: 'temperature', units: [
       { id: 'unit-c', label: 'Celsius', abbreviation: '°C' },

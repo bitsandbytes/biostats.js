@@ -38,12 +38,12 @@ See `CLAUDE.md` for a detailed overview of the app's structure, stores, and API 
 The `/import` route (`src/routes/Import.svelte`) lets you bulk-import measurements from a CSV file.
 
 - The file must have a header row.
-- Your columns can be named anything — the Import page lets you map each of your CSV's headers to the required fields below.
+- Your columns can be named anything — the Import page lets you map each of your CSV's headers to the required fields below. Headers that match a field name, or a common alias, are mapped for you automatically (case-, whitespace- and separator-insensitive, so `Date`, `measured_at` and `Taken At` all map to the date field).
 - Required fields:
   - `name` — the person's name
   - `type` — measurement type (e.g. `height`)
   - `value` — numeric measurement value
   - `unit` — unit abbreviation (e.g. `cm`)
-  - `date` — when the measurement was taken
+  - `date` — when the measurement was taken (sent to the backend as `measured_at`)
 - All five fields must be mapped before the import can be submitted. A preview of the first 10 parsed rows is shown before you import.
-- `type` and `unit` values don't need to already exist — unknown ones are created automatically (matched case-insensitively, so `Height` and `height` are treated as the same type). Any newly created types/units are listed after the import completes.
+- `type` and `unit` values don't need to already exist — unknown ones are created automatically (matched case-insensitively, so `Height` and `height` are treated as the same type). A `unit` cell also matches an existing unit by its full label, not just its abbreviation, so `Pounds` resolves to the seeded `lbs` unit instead of creating a duplicate. Any newly created types/units are listed after the import completes.

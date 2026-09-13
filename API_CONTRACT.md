@@ -235,7 +235,7 @@ Return all measurement types with their nested units. Used to populate the group
       "label": "weight",
       "units": [
         { "id": "unit-3", "label": "Kilograms", "abbreviation": "kg" },
-        { "id": "unit-4", "label": "Pounds", "abbreviation": "lb" }
+        { "id": "unit-4", "label": "Pounds", "abbreviation": "lbs" }
       ]
     }
   ]
@@ -385,10 +385,10 @@ Bulk-import measurements from a parsed CSV. The backend upserts persons by name 
 
 #### Auto-creation of types and units
 
-For each row, `type` and `unit` are resolved against existing `MeasurementType.label` / `Unit.abbreviation` **case-insensitively** (trim whitespace, then compare ignoring case), so `"Height"` and `"height"` resolve to the same type:
+For each row, `type` and `unit` are resolved against existing `MeasurementType.label` and `Unit.abbreviation` / `Unit.label` **case-insensitively** (trim whitespace, then compare ignoring case), so `"Height"` and `"height"` resolve to the same type:
 
 1. Look up a `MeasurementType` whose `label` matches the row's `type` (case-insensitive). If none exists, create one with `label` set to the row's `type` value as given (trimmed). That row is now the canonical casing for this type going forward.
-2. Within that type, look up a `Unit` whose `abbreviation` matches the row's `unit` (case-insensitive). If none exists, create one with `abbreviation` set to the row's `unit` value as given (trimmed) and `label` set to that same value — the CSV has no separate unit label, so it's reused as a placeholder. Admins can rename it afterward in the Measurement Types admin section.
+2. Within that type, look up a `Unit` whose `abbreviation` **or** `label` matches the row's `unit` (case-insensitive on both). A CSV cell of `"pounds"` therefore resolves to a seeded unit with `label` `"Pounds"` / `abbreviation` `"lbs"` instead of creating a duplicate; an `abbreviation` hit is preferred when both a `label` and an `abbreviation` match different units. If nothing matches, create a unit with `abbreviation` set to the row's `unit` value as given (trimmed) and `label` set to that same value — the CSV has no separate unit label, so it's reused as a placeholder. Admins can rename it afterward in the Measurement Types admin section.
 3. The `Measurement.type` / `Measurement.unit` actually stored on the row are the **canonical** resolved `label` / `abbreviation` (from step 1/2), not necessarily byte-identical to the CSV cell — this keeps `latestByType` keys consistent regardless of the casing used in any one import.
 
 This auto-creation happens regardless of whether the importing user is an admin — `POST /api/import` itself is not admin-gated (unlike `POST /api/measurement-types` and `POST /api/measurement-types/:id/units`), and there's no way to pause mid-import for admin approval of a new type.
@@ -476,7 +476,7 @@ Measurement
   person_id   → Person.id
   type        string   free text, copied from MeasurementType.label at entry time, e.g. "height", "weight"
   value       number
-  unit        string   free text, copied from Unit.abbreviation at entry time, e.g. "cm", "in", "kg", "lb"
+  unit        string   free text, copied from Unit.abbreviation at entry time, e.g. "cm", "in", "kg", "lbs"
   measured_at YYYY-MM-DD date string
   created_at  ISO 8601 timestamp
 

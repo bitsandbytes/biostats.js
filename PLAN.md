@@ -29,14 +29,27 @@ All routes and components are implemented and working against a real backend (vi
 - Page title changed to "bioStats" (`index.html`)
 - On the Import page (`src/routes/Import.svelte`), the `{#if error}` block now renders directly above the "Import X rows" `<Button>` at the bottom, so a failed import's error is immediately visible without scrolling up
 - Import auto-creates unknown `MeasurementType`/`Unit` rows instead of rejecting or silently passing through free text — matching is case-insensitive (trim + lowercase compare) so `"Height"`/`"height"` resolve to one type. `POST /api/import` now returns `createdTypes`/`createdUnits` alongside `{ created, skipped, errors }`; `Import.svelte` displays them and refreshes the `measurementTypes` store when either is non-empty. Resolution logic lives in `src/mocks/importResolve.js` (unit-tested) and is called from the MSW `/api/import` handler; the real backend needs to implement the same rules — see `API_CONTRACT.md`
+- **Import fixes — CSV column mapping / `measured_at` bug, and unit resolution matching by label** — code, unit tests, and manual end-to-end testing all done:
+  1. **CSV column mapping / `measured_at` bug** (`src/lib/csv.js`, `src/routes/Import.svelte`, `src/lib/csv.test.js` — new):
+     - `mapping` is now consistently keyed by canonical payload field (`name`/`type`/`value`/`unit`/`measured_at`) → chosen CSV header (was inconsistently inverted between the mapper UI and `applyMapping`).
+     - New `guessMapping()` auto-maps headers case/whitespace/separator-insensitively with aliases, so a `date` header resolves to the `measured_at` field (previously the date `<select>` bound to a key the auto-mapper never wrote, so it looked unmapped).
+     - `applyMapping()` now emits `measured_at`; it was emitting `date` (or nothing), so the backend rejected every row for a missing date.
+     - Mapper table iterates `IMPORT_FIELDS` and binds `mapping[field.key]` directly (removed the tangled `onchange` spread).
+     - Manually verified: a CSV with a `date`-named column auto-maps to `measured_at` and rows import with dates intact.
+  2. **Import unit resolution matches by label too** (`src/mocks/importResolve.js`, `src/mocks/importResolve.test.js`, `src/mocks/handlers.js`, `API_CONTRACT.md`):
+     - `resolveTypeAndUnit()` now matches a row's `unit` against an existing `Unit.abbreviation` **or** `Unit.label` (case-insensitive); an abbreviation hit wins if a label hit points at a different unit. So `"Pounds"` resolves to the seeded `lbs` unit instead of creating a duplicate.
+     - MSW seed data: `Pounds` abbreviation `lb` → `lbs`, matching the `API_CONTRACT.md` canonical example.
+     - `API_CONTRACT.md` import auto-creation step 2 rewritten to document the abbreviation-or-label rule; real Spring backend still needs the same change.
+     - Manually verified: importing a CSV using `"Pounds"` as the unit resolves to the existing `lbs` unit, no duplicate created.
+  - `npm test` (28 passing) and `npm run build` are green. README and this file updated.
 
 ### In Progress
 
-Nothing actively in progress.
+Nothing in progress. The import fixes above are done and manually verified but **still uncommitted** — working tree only.
 
 ### Next Step to Pick Up From
 
-Pick from the Unresolved / Needs Decision items below — none are blocking, so ask the user which to prioritize (e.g. import validation policy, `svelte-routing` replacement, or containerization).
+Commit the import fixes (working tree changes listed above). After that, pick from the Unresolved / Needs Decision items below — none are blocking.
 
 ---
 
@@ -207,13 +220,13 @@ src/
 │
 ├── lib/
 │   ├── api.js
-│   ├── csv.js
+│   ├── csv.js                    # PapaParse wrapper + guessMapping / applyMapping (unit-tested)
 │   └── format.js
 │
 └── mocks/
     ├── browser.js
     ├── handlers.js                # MSW — predefined measurementTypes seed data
-    └── importResolve.js           # case-insensitive type/unit lookup + auto-create, used by the /api/import handler
+    └── importResolve.js           # case-insensitive type/unit lookup (unit matches abbreviation or label) + auto-create, used by the /api/import handler
 ```
 
 ---

@@ -6,6 +6,9 @@ function makeTypes() {
     { id: 'type-height', label: 'height', units: [
       { id: 'unit-cm', label: 'Centimeters', abbreviation: 'cm' },
     ] },
+    { id: 'type-weight', label: 'weight', units: [
+      { id: 'unit-lbs', label: 'Pounds', abbreviation: 'lbs' },
+    ] },
   ];
 }
 
@@ -38,7 +41,7 @@ describe('resolveTypeAndUnit', () => {
 
     expect(type.id).toBe('type-height');
     expect(created.type).toBeNull();
-    expect(types).toHaveLength(1);
+    expect(types).toHaveLength(2);
   });
 
   it('matches an existing unit case-insensitively within the resolved type', () => {
@@ -47,6 +50,44 @@ describe('resolveTypeAndUnit', () => {
 
     expect(unit.id).toBe('unit-cm');
     expect(created.unit).toBeNull();
+  });
+
+  it('matches an existing unit by its full label, not just its abbreviation', () => {
+    const types = makeTypes();
+    const { unit, created } = resolveTypeAndUnit(types, 'weight', 'Pounds', uid);
+
+    expect(unit.id).toBe('unit-lbs');
+    expect(unit.abbreviation).toBe('lbs');
+    expect(created.unit).toBeNull();
+  });
+
+  it('matches an existing unit by label case-insensitively', () => {
+    const types = makeTypes();
+    const { unit, created } = resolveTypeAndUnit(types, 'weight', 'POUNDS', uid);
+
+    expect(unit.id).toBe('unit-lbs');
+    expect(created.unit).toBeNull();
+  });
+
+  it('prefers an abbreviation hit over a label hit on a different unit', () => {
+    const types = [
+      { id: 'type-weight', label: 'weight', units: [
+        { id: 'unit-a', label: 'Stones', abbreviation: 'lbs' },
+        { id: 'unit-b', label: 'lbs', abbreviation: 'st' },
+      ] },
+    ];
+    const { unit } = resolveTypeAndUnit(types, 'weight', 'lbs', uid);
+
+    expect(unit.id).toBe('unit-a');
+  });
+
+  it('creates a new unit when neither abbreviation nor label matches', () => {
+    const types = makeTypes();
+    const { unit, created } = resolveTypeAndUnit(types, 'weight', 'kg', uid);
+
+    expect(unit.abbreviation).toBe('kg');
+    expect(created.unit).not.toBeNull();
+    expect(types.find(t => t.id === 'type-weight').units).toHaveLength(2);
   });
 
   it('creates a new unit under an existing type when the unit is new', () => {

@@ -1,11 +1,13 @@
 <script>
   import Button from '../components/ui/Button.svelte';
   import * as api from '../lib/api.js';
-  import { parseCsv, applyMapping, REQUIRED_COLUMNS } from '../lib/csv.js';
+  import { parseCsv, applyMapping, guessMapping, IMPORT_FIELDS } from '../lib/csv.js';
   import { loadTypes } from '../stores/measurementTypes.svelte.js';
 
   let columns = $state([]);
   let rows = $state([]);
+  // { <canonical field key>: <chosen CSV header> } — same shape guessMapping returns
+  // and applyMapping consumes. The date field's key is `measured_at`, not `date`.
   let mapping = $state({});
   let result = $state(null);
   let error = $state('');
@@ -20,19 +22,15 @@
       const parsed = await parseCsv(file);
       columns = parsed.columns;
       rows = parsed.rows;
-      // Auto-map columns whose names already match required names
-      mapping = Object.fromEntries(
-        columns
-          .filter(c => REQUIRED_COLUMNS.includes(c))
-          .map(c => [c, c])
-      );
+      // Auto-map headers to fields (case-insensitive, alias-aware)
+      mapping = guessMapping(columns);
     } catch {
       error = 'Failed to parse CSV.';
     }
   }
 
   let preview = $derived(rows.slice(0, 10));
-  let mappingComplete = $derived(REQUIRED_COLUMNS.every(r => Object.values(mapping).includes(r)));
+  let mappingComplete = $derived(IMPORT_FIELDS.every(f => mapping[f.key]));
 
   async function handleImport() {
     submitting = true;
@@ -86,12 +84,11 @@
           <tr><th>Required field</th><th>CSV column</th></tr>
         </thead>
         <tbody>
-          {#each REQUIRED_COLUMNS as req}
+          {#each IMPORT_FIELDS as field}
             <tr>
-              <td><code>{req}</code></td>
+              <td><code>{field.label}</code></td>
               <td>
-                <select bind:value={mapping[req === 'date' ? 'measured_at' : req]}
-                  onchange={e => { mapping = { ...mapping, [req]: e.target.value }; }}>
+                <select bind:value={mapping[field.key]}>
                   <option value="">— select —</option>
                   {#each columns as col}
                     <option value={col}>{col}</option>
