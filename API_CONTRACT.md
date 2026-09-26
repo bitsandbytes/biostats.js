@@ -66,7 +66,7 @@ Return the currently authenticated user. Called on app load to restore session s
 
 ### `GET /api/people`
 
-Return all people with their latest measurement per type. Used to populate the Dashboard.
+Return all people with their latest measurement per type and a short recent history per type. Used to populate the Dashboard.
 
 - **Auth required:** Yes
 - **Response `200`:** `PersonSummary[]`
@@ -81,11 +81,18 @@ Return all people with their latest measurement per type. Used to populate the D
           "unit": "string",
           "measured_at": "YYYY-MM-DD"
         }
+      },
+      "recentByType": {
+        "<type>": [
+          { "value": 0.0, "unit": "string", "measured_at": "YYYY-MM-DD" }
+        ]
       }
     }
   ]
   ```
   `latestByType` is keyed by measurement type string (e.g. `"height"`, `"weight"`). Empty object `{}` if the person has no measurements. "Latest" means the entry with the greatest `measured_at` for that type.
+
+  `recentByType` has the same keys. Each value is that type's **12 most recent** measurements (by `measured_at`), ordered **oldest first**, so the last element equals `latestByType[type]`. Fewer than 12 if the person has fewer. Empty object `{}` if the person has no measurements. The Dashboard draws these as per-type trend lines; the frontend filters to entries whose `unit` matches the latest one, so mixed units within a type are allowed. The reference implementation is `summarizeMeasurements()` in `src/lib/summary.js` (`RECENT_LIMIT = 12`). A backend that omits this field still works — trend lines are simply not drawn.
 
 ---
 
@@ -484,6 +491,7 @@ PersonSummary
   id          uuid
   name        string
   latestByType  map<string, { value, unit, measured_at }>
+  recentByType  map<string, { value, unit, measured_at }[]>   up to 12 per type, oldest first
 
 PersonDetail
   id            uuid

@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte';
-  import { Router, Route } from 'svelte-routing';
+  import { router, matchPath } from './stores/router.svelte.js';
   import { auth, initSession } from './stores/auth.svelte.js';
   import AppShell from './components/layout/AppShell.svelte';
   import Login from './routes/Login.svelte';
@@ -15,19 +15,24 @@
     await initSession();
     ready = true;
   });
+
+  let personParams = $derived(matchPath('/person/:id', router.path));
 </script>
 
 {#if !ready}
   <!-- Waiting for session check -->
 {:else if auth.session}
-  <Router>
-    <AppShell>
-      <Route path="/"><Dashboard /></Route>
-      <Route path="/person/:id" let:params><PersonDetail id={params.id} /></Route>
-      <Route path="/import"><Import /></Route>
-      {#if auth.session?.admin}<Route path="/admin"><Admin /></Route>{/if}
-    </AppShell>
-  </Router>
+  <AppShell>
+    {#if router.path === '/'}
+      <Dashboard />
+    {:else if personParams}
+      <PersonDetail id={personParams.id} />
+    {:else if router.path === '/import'}
+      <Import />
+    {:else if router.path === '/admin' && auth.session?.admin}
+      <Admin />
+    {/if}
+  </AppShell>
 {:else}
   <Login />
 {/if}

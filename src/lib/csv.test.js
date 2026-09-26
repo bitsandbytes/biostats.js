@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { guessMapping, applyMapping, IMPORT_FIELDS } from './csv.js';
+import { guessMapping, applyMapping, measurementsToCsv, IMPORT_FIELDS } from './csv.js';
 
 describe('IMPORT_FIELDS', () => {
   it('uses the payload key measured_at for the date field', () => {
@@ -88,5 +88,40 @@ describe('applyMapping', () => {
   it('skips fields with no mapped column', () => {
     const out = applyMapping(rows, { name: 'Person', value: 'Reading' })[0];
     expect(out).toEqual({ name: 'Ada', value: 170 });
+  });
+});
+
+describe('measurementsToCsv', () => {
+  const ms = [
+    { id: 'a', type: 'weight', value: 58.2, unit: 'kg', measured_at: '2026-09-24' },
+    { id: 'b', type: 'heart rate', value: 68, unit: 'bpm', measured_at: '2026-04-01' },
+  ];
+
+  it('writes a header row matching the import field labels', () => {
+    const [header] = measurementsToCsv('Maya Chen', ms).split(/\r?\n/);
+    expect(header).toBe('name,type,value,unit,date');
+  });
+
+  it('writes one row per measurement, oldest first', () => {
+    const lines = measurementsToCsv('Maya Chen', ms).split(/\r?\n/);
+    expect(lines.slice(1)).toEqual([
+      'Maya Chen,heart rate,68,bpm,2026-04-01',
+      'Maya Chen,weight,58.2,kg,2026-09-24',
+    ]);
+  });
+
+  it('quotes values containing commas', () => {
+    const csv = measurementsToCsv('Chen, Maya', ms.slice(0, 1));
+    expect(csv.split(/\r?\n/)[1]).toBe('"Chen, Maya",weight,58.2,kg,2026-09-24');
+  });
+
+  it('round-trips through guessMapping/applyMapping', () => {
+    const csv = measurementsToCsv('Maya Chen', ms);
+    const [header, ...rows] = csv.split(/\r?\n/).map(l => l.split(','));
+    const mapping = guessMapping(header);
+    const objects = rows.map(r => Object.fromEntries(header.map((h, i) => [h, r[i]])));
+    expect(applyMapping(objects, mapping)[0]).toEqual({
+      name: 'Maya Chen', type: 'heart rate', value: 68, unit: 'bpm', measured_at: '2026-04-01',
+    });
   });
 });

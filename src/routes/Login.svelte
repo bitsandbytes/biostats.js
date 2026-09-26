@@ -1,6 +1,7 @@
 <script>
   import { login } from '../stores/auth.svelte.js'; // sets auth.session on success
   import Button from '../components/ui/Button.svelte';
+  import Icon from '../components/ui/Icon.svelte';
 
   let email = $state('');
   let password = $state('');
@@ -23,7 +24,10 @@
 
 <div class="login-page">
   <form class="login-form" onsubmit={handleSubmit}>
-    <h1>biostats</h1>
+    <div class="brand">
+      <span class="mark"><Icon name="pulse" size={22} strokeWidth={2.2} /></span>
+      <h1>bioStats</h1>
+    </div>
     {#if error}
       <p class="error">{error}</p>
     {/if}
@@ -44,14 +48,15 @@
 <style>
   .login-page {
     min-height: 100vh;
+    padding: 16px;
     display: grid;
     place-items: center;
-    background: #f9fafb;
+    background: var(--bg);
   }
   .login-form {
     background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 2rem;
     width: 100%;
     max-width: 360px;
@@ -59,10 +64,25 @@
     flex-direction: column;
     gap: 1rem;
   }
+  .brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 0.5rem;
+  }
+  .mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--primary);
+    color: white;
+    display: grid;
+    place-items: center;
+  }
   h1 {
-    margin: 0 0 0.5rem;
-    font-size: 1.5rem;
-    text-align: center;
+    margin: 0;
+    font-size: 1.6rem;
   }
   .field {
     display: flex;
@@ -72,16 +92,16 @@
   label {
     font-size: 0.85rem;
     font-weight: 500;
-    color: #374151;
+    color: var(--ink);
   }
   input {
     padding: 0.5rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.9rem;
   }
   .error {
-    color: #dc2626;
+    color: var(--danger);
     font-size: 0.875rem;
     margin: 0;
     text-align: center;

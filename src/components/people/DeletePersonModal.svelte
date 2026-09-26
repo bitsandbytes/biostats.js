@@ -19,7 +19,7 @@
 <Modal title="Delete Person" {onclose}>
   <p>Are you sure you want to delete <strong>{person.name}</strong>? All measurements will be permanently removed.</p>
   <div class="actions">
-    <Button variant="secondary" onclick={onclose} type="button">Cancel</Button>
+    <Button variant="quiet" onclick={onclose} type="button">Cancel</Button>
     <Button variant="danger" onclick={handleConfirm} disabled={submitting}>
       {submitting ? 'Deleting…' : 'Delete'}
     </Button>
@@ -30,7 +30,7 @@
   p {
     margin: 0 0 1.25rem;
     font-size: 0.95rem;
-    color: #374151;
+    color: var(--ink);
   }
   .actions {
     display: flex;

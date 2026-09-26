@@ -46,7 +46,7 @@
   input {
     width: 100%;
     padding: 0.45rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.9rem;
     box-sizing: border-box;
@@ -57,7 +57,7 @@
     left: 0;
     right: 0;
     background: white;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border);
     border-radius: 6px;
     margin: 0;
     padding: 0.25rem 0;
@@ -73,6 +73,6 @@
     font-size: 0.9rem;
   }
   li:hover {
-    background: #f3f4f6;
+    background: var(--surface-muted);
   }
 </style>

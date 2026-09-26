@@ -1,5 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { resolveTypeAndUnit } from './importResolve.js';
+import { summarizeMeasurements } from '../lib/summary.js';
+import { seedPeople } from './seed.js';
 
 // --- seed data ---
 const users = [
@@ -37,17 +39,14 @@ let sessionUserId = null;
 let nextId = 1;
 const uid = () => `gen-${nextId++}`;
 
+// Demo people + ~6 months of measurements so the Dashboard trend lines and
+// PersonDetail chart have something to show in mock mode.
+seedPeople(people, measurements);
+
 // --- helpers ---
-function latestByType(personId) {
-  const byType = {};
-  for (const m of measurements) {
-    if (m.person_id !== personId) continue;
-    const cur = byType[m.type];
-    if (!cur || m.measured_at > cur.measured_at) {
-      byType[m.type] = { value: m.value, unit: m.unit, measured_at: m.measured_at };
-    }
-  }
-  return byType;
+/** PersonSummary fields (`latestByType`, `recentByType`) for one person. */
+function summaryFor(personId) {
+  return summarizeMeasurements(measurements.filter(m => m.person_id === personId));
 }
 
 function requireSession() {
@@ -119,7 +118,7 @@ export const handlers = [
   http.get('/api/people', () => {
     const denied = requireSession();
     if (denied) return denied;
-    return HttpResponse.json(people.map(p => ({ ...p, latestByType: latestByType(p.id) })));
+    return HttpResponse.json(people.map(p => ({ ...p, ...summaryFor(p.id) })));
   }),
 
   http.post('/api/people', async ({ request }) => {

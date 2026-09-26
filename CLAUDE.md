@@ -18,24 +18,30 @@ When changing anything under `src/`:
 npm run dev      # Start dev server (Vite HMR)
 npm run build    # Production build
 npm run preview  # Preview production build
+npm test         # Unit tests (vitest)
 ```
 
 ## Environment
 
-`VITE_API_BASE_URL` in `.env.local` sets the backend origin (e.g. `http://localhost:8080`). Set it to empty string (`VITE_API_BASE_URL=`) to use MSW mock handlers instead.
+`VITE_API_BASE_URL` in `.env.local` sets the backend origin (e.g. `http://localhost:8080`). Empty (`VITE_API_BASE_URL=`) routes `/api/*` through the Vite dev proxy; `VITE_API_BASE_URL=mock` activates the MSW mock handlers (seeded with demo people from `src/mocks/seed.js`).
 
 ## Architecture
 
-Svelte 5 + Vite SPA. `index.html` → `src/main.js` → `src/App.svelte`. Routing via `svelte-routing`. No UI component library; no backend SDK.
+Svelte 5 + Vite SPA. `index.html` → `src/main.js` → `src/App.svelte`. Routing is a small hand-rolled router (`src/lib/router.js` + `src/stores/router.svelte.js`), not a library — `App.svelte` matches `router.path` with `{#if}`/`{:else if}` branches. No UI component library; no backend SDK.
 
 **App.svelte** is the auth gate and router outlet. It calls `initSession()` on mount (hits `GET /api/auth/me`) and renders either `<Login>` or the `<AppShell>` + routes.
+
+**Responsive layout:** `src/stores/viewport.svelte.js` exports `desktop` (a Svelte `MediaQuery`, ≥1024px). `AppShell` renders `Sidebar` as a persistent left column on desktop, and on narrower screens a top bar whose hamburger opens the same `Sidebar` in a slide-out drawer. Pages that differ structurally by size (Dashboard) branch on `desktop.current`; otherwise use `@media (min-width: 1024px)` in component CSS.
+
+**Styling:** global tokens (colours, radii) and base element styles live in `src/app.css` (imported by `main.js`); components use `var(--…)` tokens, not hard-coded colours. Font is Figtree via `@fontsource/figtree` (self-hosted). Icons are inline SVGs in `src/components/ui/Icon.svelte` — add new ones to its `PATHS` map.
 
 ### Stores (`src/stores/*.svelte.js`)
 
 Svelte 5 runes-based state, exported from `.svelte.js` modules:
 
 - **`auth.svelte.js`** — `auth.session` (`null | { id, email }`). Mutated by `initSession()`, `login()`, `logout()`.
-- **`people.svelte.js`** — `PersonSummary[]` for the Dashboard. `addMeasurement()` updates `latestByType` in place without a re-fetch.
+- **`people.svelte.js`** — `PersonSummary[]` for the Dashboard. `addMeasurement()` folds the new measurement into `latestByType` and `recentByType` in place (via `applyMeasurement` in `src/lib/summary.js`) without a re-fetch.
+- **`viewport.svelte.js`** — `desktop` breakpoint (see Responsive layout above).
 - **`measurementTypes.svelte.js`** — `store.types`: `MeasurementType[]` (`{ id, label, units: [{ id, label, abbreviation }] }`), admin-managed. Exposes CRUD helpers (`createType`, `renameType`, `removeType`, `addUnit`, `renameUnit`, `removeUnit`) that call the API and mutate the store in place.
 
 Per-person measurement history is **not** in global state — it is fetched on demand and held in local component state inside `PersonDetail.svelte`.
@@ -48,22 +54,27 @@ Single `request(method, path, body)` helper. All calls use `credentials: 'includ
 
 | Path | Component | Purpose |
 |---|---|---|
-| `/` | `Dashboard.svelte` | `PersonCard` grid; inline quick-add form per card |
-| `/person/:id` | `PersonDetail.svelte` | Full measurement history, `TrendChart`, delete person |
+| `/` | `Dashboard.svelte` | Desktop: quick-add bar + `PeopleTable` (latest value + sparkline per type, column toggles, sort, Ctrl+K filter). Phone: `PersonCard` list with inline add form |
+| `/person/:id` | `PersonDetail.svelte` | Person switcher, time ranges, `TrendChart`, series tiles, CSV export, delete person, history; side panel with `MeasurementForm` + recent entries |
 | `/import` | `Import.svelte` | CSV bulk import with column mapper |
 | `/admin` | `Admin.svelte` | User management (create/delete); Measurement Types management (create/rename/delete type, create/edit/delete unit) |
 
 ### Key components
 
-- **`MeasurementForm`** — used in both Dashboard (inline) and PersonDetail. Single `<select>` for unit, sourced from the `measurementTypes` store and grouped by type via `<optgroup>` (option text: `"<unit label> (<abbreviation>)"`). There is no separate type field — picking a unit sets the measurement's `type` to the parent type's label and `unit` to the chosen unit's abbreviation.
-- **`TrendChart`** — D3 multi-line chart, time x-axis, one series per measurement type. Types with different units get separate y-axes (up to two); beyond two collapses to a normalized view.
+- **`MeasurementForm`** — used in the Dashboard quick-add bar (`people` prop adds a Person select; `layout="bar"`), phone cards, and the PersonDetail panel (`layout="stacked"`). Single `<select>` for unit, sourced from the `measurementTypes` store and grouped by type via `<optgroup>` (option text: `"<unit label> (<abbreviation>)"`). There is no separate type field — picking a unit sets the measurement's `type` to the parent type's label and `unit` to the chosen unit's abbreviation. Calls `onsubmit(data, { personId })`; after saving it clears only the value.
+- **`PeopleTable`** / **`Sparkline`** — desktop Dashboard table; sparklines draw `recentByType` values.
+- **`TrendChart`** — D3 multi-line chart, time x-axis, hover crosshair + tooltip. Draws the series it's given with per-series `styles` (`axis`, `color`, `dashed`) from `seriesStyles()`; at most two units, one per y-axis (right-axis lines dashed). Series selection/toggling (max two units — adding a third drops the oldest) lives in `src/lib/chartSeries.js`.
 - **`AutocompleteInput`** — unused free-text input with dropdown suggestions, kept in `src/components/ui/` in case free-text entry is needed elsewhere (e.g. Import column mapper).
 
 ### Utilities (`src/lib/`)
 
 - `api.js` — all fetch calls
-- `csv.js` — PapaParse + column mapping for import
+- `csv.js` — PapaParse + column mapping for import; `measurementsToCsv()` for export (re-importable)
 - `format.js` — number display and date formatting
+- `summary.js` — `summarizeMeasurements()` / `applyMeasurement()`: `latestByType` + `recentByType` (reference implementation of the `GET /api/people` summary; also used by the MSW mock)
+- `chartSeries.js` — series grouping (type+unit), selection toggling, axis/colour assignment, time ranges
+- `sparkline.js` — polyline points for sparklines
+- `display.js` — initials, avatar tones, per-type icon/tone, `capitalize`
 
 ## Local Development Without the Backend
 

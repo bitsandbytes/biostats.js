@@ -168,7 +168,7 @@
       {#if users.length === 0}
         <EmptyState message="No users yet." />
       {:else}
-        <table class="table">
+        <div class="scroll"><table class="table">
           <thead>
             <tr><th>Email</th><th>Role</th><th>Created</th><th></th></tr>
           </thead>
@@ -182,7 +182,7 @@
               </tr>
             {/each}
           </tbody>
-        </table>
+        </table></div>
       {/if}
     </section>
 
@@ -266,26 +266,27 @@
   h1 { margin: 0; font-size: 1.5rem; }
   h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
   section {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 1.25rem;
   }
   .form { display: flex; gap: 0.75rem; align-items: flex-end; flex-wrap: wrap; }
   .field { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 150px; }
-  label { font-size: 0.85rem; font-weight: 500; color: #374151; }
+  label { font-size: 0.85rem; font-weight: 500; color: var(--ink); }
   input {
     padding: 0.45rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.9rem;
   }
-  .error { color: #dc2626; font-size: 0.875rem; margin: 0 0 0.5rem; }
-  .forbidden { color: #6b7280; font-size: 0.95rem; }
+  .error { color: var(--danger); font-size: 0.875rem; margin: 0 0 0.5rem; }
+  .forbidden { color: var(--muted); font-size: 0.95rem; }
   .checkbox-label { display: flex; align-items: center; gap: 0.4rem; font-size: 0.9rem; white-space: nowrap; }
+  .scroll { overflow-x: auto; }
   .table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-  th, td { padding: 0.6rem 0.75rem; border-bottom: 1px solid #e5e7eb; text-align: left; }
-  th { font-weight: 600; color: #374151; }
+  th, td { padding: 0.6rem 0.75rem; border-bottom: 1px solid var(--border); text-align: left; }
+  th { font-weight: 600; color: var(--ink); }
   td:last-child { text-align: right; }
   .badge {
     display: inline-block;
@@ -297,14 +298,14 @@
     color: #6d28d9;
   }
   .type-list { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
-  .type-group { border: 1px solid #e5e7eb; border-radius: 8px; padding: 1rem; }
+  .type-group { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; }
   .type-header { display: flex; align-items: center; gap: 0.5rem; }
   .type-header h3 { margin: 0; font-size: 1rem; flex: 1; }
   .type-header input { flex: 1; }
   .unit-list { list-style: none; margin: 0.75rem 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
   .unit-list li { display: flex; align-items: center; gap: 0.5rem; }
   .unit-list li span { flex: 1; font-size: 0.9rem; }
-  .no-units { color: #9ca3af; font-size: 0.85rem; margin: 0.5rem 0; }
+  .no-units { color: var(--faint); font-size: 0.85rem; margin: 0.5rem 0; }
   .abbr-input { max-width: 120px; }
   .add-unit-form { margin-top: 0.5rem; }
 </style>

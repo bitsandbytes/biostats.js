@@ -138,7 +138,7 @@
   h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
   .dropzone {
     background: white;
-    border: 2px dashed #d1d5db;
+    border: 2px dashed var(--border);
     border-radius: 10px;
     padding: 2rem;
     display: flex;
@@ -147,17 +147,17 @@
     gap: 0.75rem;
   }
   label { font-weight: 500; cursor: pointer; }
-  .error { color: #dc2626; font-size: 0.875rem; margin: 0; }
+  .error { color: var(--danger); font-size: 0.875rem; margin: 0; }
   .result { background: #d1fae5; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.9rem; }
   .result p { margin: 0; }
   .result .note { margin-top: 0.5rem; color: #065f46; }
   section {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 1.25rem;
   }
-  .hint { margin: 0 0 0.75rem; font-size: 0.875rem; color: #6b7280; }
+  .hint { margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--muted); }
   .map-table, .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -166,12 +166,12 @@
   .map-table th, .map-table td,
   .data-table th, .data-table td {
     padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border);
     text-align: left;
   }
   select {
     padding: 0.35rem 0.5rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border);
     border-radius: 4px;
   }
   .scroll { overflow-x: auto; }

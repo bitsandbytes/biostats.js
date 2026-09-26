@@ -82,4 +82,16 @@ export function applyMapping(rows, mapping) {
   });
 }
 
+/**
+ * Serialize one person's measurements to CSV (for the PersonDetail "Export"
+ * button). Columns are the import field labels — name, type, value, unit,
+ * date — so an exported file can be re-imported as-is. Rows are oldest first.
+ */
+export function measurementsToCsv(personName, measurements) {
+  const rows = [...measurements]
+    .sort((a, b) => a.measured_at.localeCompare(b.measured_at))
+    .map(m => [personName, m.type, m.value, m.unit, m.measured_at]);
+  return Papa.unparse({ fields: IMPORT_FIELDS.map(f => f.label), data: rows });
+}
+
 export { IMPORT_FIELDS };
