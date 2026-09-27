@@ -1,5 +1,6 @@
 {
-  "name": "hello-svelte",
+  "name": "biostats",
+  "version": "0.0.1-dev",
   "private": true,
   "type": "module",
   "scripts": {
