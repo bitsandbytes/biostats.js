@@ -61,6 +61,13 @@ export function guessMapping(columns) {
   return mapping;
 }
 
+/** Parse a CSV cell as a finite number, or null if it is blank or not numeric. */
+function toNumberOrNull(v) {
+  if (v == null || String(v).trim() === '') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
 /**
  * Apply a column mapping to raw rows, producing ImportPayload rows ready for
  * POST /api/import.
@@ -68,7 +75,9 @@ export function guessMapping(columns) {
  * `mapping` is keyed by canonical field key (`name`, `type`, `value`, `unit`,
  * `measured_at`) with the chosen CSV header as the value — the same shape
  * `guessMapping` returns. Fields whose mapped header is falsy are omitted.
- * `value` is coerced to a Number.
+ * `value` is coerced to a Number; a blank or unparseable cell becomes `null`
+ * (not `Number('')` → 0, which would silently import a zero), so the backend
+ * rejects that row and reports it in `rowErrors`.
  */
 export function applyMapping(rows, mapping) {
   return rows.map(row => {
@@ -77,7 +86,7 @@ export function applyMapping(rows, mapping) {
       if (!csvHeader) continue;
       out[key] = row[csvHeader];
     }
-    out.value = Number(out.value);
+    out.value = toNumberOrNull(out.value);
     return out;
   });
 }

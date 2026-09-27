@@ -374,6 +374,9 @@ Bulk-import measurements from a parsed CSV. The backend upserts persons by name 
     "created": 0,
     "skipped": 0,
     "errors": 0,
+    "rowErrors": [
+      { "row": 0, "field": "value", "message": "string" }
+    ],
     "createdTypes": [
       { "id": "uuid", "label": "string" }
     ],
@@ -388,7 +391,29 @@ Bulk-import measurements from a parsed CSV. The backend upserts persons by name 
     ]
   }
   ```
-  `created` — rows successfully inserted. `skipped` — rows that were duplicates or otherwise not inserted. `errors` — rows that failed validation or processing. `createdTypes` / `createdUnits` — the `MeasurementType`s and `Unit`s newly created *by this import call* (see below). Each appears at most once, even if matched by multiple rows. Omit or return empty arrays when nothing new was created.
+  `created` — rows successfully inserted. `skipped` — rows that were duplicates or otherwise not inserted. `errors` — rows that failed validation or processing. `rowErrors` — one entry per problem on a failed row (see **Row validation** below); a row with several problems has several entries, so `errors` equals the number of *distinct* `row` values, not `rowErrors.length`. Always present; empty when every row succeeded. `createdTypes` / `createdUnits` — the `MeasurementType`s and `Unit`s newly created *by this import call* (see below). Each appears at most once, even if matched by multiple rows. Omit or return empty arrays when nothing new was created.
+
+#### Row validation
+
+Each row is validated **before** anything is created for it. A row that fails validation is not inserted and does not create a person, type or unit; it counts toward `errors` and is reported in `rowErrors`. Other rows are still imported — one bad row never fails the whole request.
+
+Each `rowErrors` entry is:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `row` | integer | 0-based index of the row in the request's `rows` array |
+| `field` | string \| null | The offending payload field (`name`, `type`, `value`, `unit`, `measured_at`), or `null` for a failure not tied to one field (e.g. an unexpected server error while inserting) |
+| `message` | string | Human-readable reason, shown to the user as-is |
+
+Rules — report **every** failing rule for a row, in this field order:
+
+1. `name` — required; must not be blank after trimming. → `"Name is required."`
+2. `type` — required; must not be blank after trimming. → `"Type is required."`
+3. `value` — must be a finite JSON number. The frontend sends `null` for a blank or non-numeric CSV cell. → `"Value is missing or not a number."`
+4. `unit` — required; must not be blank after trimming. → `"Unit is required."`
+5. `measured_at` — required (`"Date is required."`), must match `YYYY-MM-DD` (`"Date \"<value>\" must be in YYYY-MM-DD form."`), and must be a real calendar date, e.g. not `2026-02-30` (`"Date \"<value>\" is not a real date."`).
+
+The messages above are what the MSW mock returns (`src/mocks/importValidate.js`); the backend doesn't have to match them word for word, but should say the same thing. Person names are trimmed before the upsert-by-name lookup.
 
 #### Auto-creation of types and units
 

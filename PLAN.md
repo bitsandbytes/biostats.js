@@ -24,7 +24,7 @@ All routes and components are implemented and working against a real backend (vi
 - `MeasurementForm` now has a single `<select>` for unit, grouped by type via `<optgroup>`, displaying `"<label> (<abbreviation>)"`; picking a unit sets both the measurement's `type` (parent type's label) and `unit` (abbreviation) — there is no separate type field anymore
 - Dev setup: Vite proxy to `https://localhost:8443` with `secure: false`; MSW activated by `VITE_API_BASE_URL=mock`
 - Svelte 5 compatibility: all components use runes (`$props`, `$state`, `$derived`, `$effect`, `{@render}`), no Svelte 4 idioms remaining
-- Favicon wired up (`public/` + `<link>` tags in `index.html`)
+- Favicon wired up (`public/` + `<link>` tags in `index.html`). It now matches the app's logo mark (the white pulse line on a teal `--nav-mark` rounded square shown next to "bioStats"): `public/favicon.svg` is the source, and the PNG sizes and `favicon.ico` (16/32/48) were rendered from it with headless Chrome. The 16/32/48px versions use a heavier stroke so the line stays visible, and `apple-touch-icon.png` is full-bleed because iOS rounds the corners itself.
 - `README.md` added (setup, commands, CSV import field requirements)
 - Page title changed to "bioStats" (`index.html`)
 - On the Import page (`src/routes/Import.svelte`), the `{#if error}` block now renders directly above the "Import X rows" `<Button>` at the bottom, so a failed import's error is immediately visible without scrolling up
@@ -61,29 +61,41 @@ All routes and components are implemented and working against a real backend (vi
   - MSW mock mode now seeds four demo people with ~8 months of readings (`src/mocks/seed.js`).
   - New tested helpers: `summary.js`, `chartSeries.js`, `sparkline.js`, `display.js`, `measurementsToCsv` in `csv.js`. `npm test` (76 passing) and `npm run build` (no warnings) are green. Verified in headless Chrome at 1440×900 and 390×844 in mock mode: login, dashboard, row pre-fill, person page, chart tooltip, phone drawer; no horizontal overflow at phone width, no console errors beyond the expected pre-login 401.
 
+- **Import reports which rows failed and why:**
+  - `POST /api/import` response gains `rowErrors: [{ row, field, message }]`. `row` is the 0-based index into the request's `rows` array. The validation rules are documented under "Row validation" in `API_CONTRACT.md`: name/type/unit are required, value must be a finite number, and the date must be a real `YYYY-MM-DD` date. Every failing rule on a row is reported, and invalid rows no longer create people, types or units.
+  - `src/mocks/importValidate.js` (new, unit-tested) holds the rules; the MSW `/api/import` handler validates each row before inserting it.
+  - `applyMapping()` now sends `null` for a blank or non-numeric value. Previously `Number('')` quietly imported a blank cell as `0`.
+  - `src/lib/importReport.js` (new, unit-tested) provides `groupRowErrors()`, which groups problems per row alongside the row's original CSV text.
+  - The Import page lists failed rows: row number, original values with bad cells highlighted, and the reasons. The result banner turns coral when any row failed, and hard-coded colours were replaced with tokens.
+  - `npm test` (92 passing) and `npm run build` (no warnings) are green. Verified in headless Chrome in mock mode: a CSV with 2 good and 3 bad rows imported 2 and listed the 3 failures with the correct reasons, with no console errors.
+- **Removed the unused `AutocompleteInput.svelte`.**
+- **Import scrolls back to the top on completion** so the result banner and failed-rows table are visible, since the Import button is at the bottom below the preview. Scrolling is smooth unless the user prefers reduced motion. It doesn't scroll on a request failure, because that error shows next to the button. Verified in headless Chrome (scrollY 125 → 0).
+- The router change and the redesign are committed (`1866aad`). The backend now implements `recentByType` and the import unit-label matching.
+
 ### In Progress
 
-Nothing in progress. The router replacement and the redesign are both **uncommitted** in the working tree.
+Nothing in progress.
 
 ### Next Step to Pick Up From
 
-1. Click through the redesign by hand in a real browser (both widths), including adding/deleting measurements and the Import/Admin pages, then commit — ideally the router change and the redesign as separate commits.
-2. **Backend:** implement `recentByType` on `GET /api/people` in the Spring Boot project (same rules as `summarizeMeasurements`, `RECENT_LIMIT = 12`). Until then the real backend shows the Dashboard without trend lines.
-3. Mockup features deliberately left out of this pass (pick up if wanted): chart zoom/pan + range brush, PNG export, drag-and-drop CSV onto the person page, "compare selected people", keyboard shortcuts beyond Ctrl+K (↑/↓ switch person, N new measurement), and a phone-specific sticky "Add measurement" button.
+1. **Backend:** implement `rowErrors` and the per-row validation rules on `POST /api/import`, following "Row validation" in `API_CONTRACT.md`. Until then the real backend returns no `rowErrors`, and the Import page shows only the counts (it tolerates the field being absent).
+2. **Restrict person deletion to admins and the person's creator** (not urgent). Today any logged-in user can delete any person, and nothing records who created a person. This needs:
+   - a `created_by` user id on `Person`, set by `POST /api/people`. Decide what import-created people get: the importing user is the natural choice.
+   - `DELETE /api/people/:id` returning `403` unless the caller is an admin or the creator, documented in `API_CONTRACT.md` and matched in the MSW mock.
+   - the delete button on `PersonDetail` shown only when allowed. That means either exposing `created_by` on `PersonDetail`/`PersonSummary`, or having the backend return a `canDelete` flag.
+
+3. **Store every measurement in metric and display it in each user's preferred units.** Right now a measurement keeps whatever unit it was entered in, so a person's weight history can mix `kg` and `lbs`, and charts plot them as separate series. This is a significant change and will probably mean re-architecting how admin-managed types and units work, since a lot of effort went into letting users add arbitrary types and units. Open questions:
+   - Every unit needs a conversion to a canonical base unit for its type: a factor, or an offset + factor for temperature.
+   - What happens to user-added types that have no metric equivalent (e.g. `bpm`, a free-form score)? Does each type declare a base unit?
+   - Add a per-user display preference (metric / imperial, or per type) on `User` / `GET /api/auth/me`.
+   - Plan a data migration for existing measurements, and decide how import handles units it can't convert.
+   - Work out the effect on `latestByType` / `recentByType`, CSV export (export in stored or display units?), `TrendChart` series grouping, and `MeasurementForm` (enter in the preferred unit, convert on save).
 
 ---
 
 ## Unresolved / Needs Decision
 
-**1. Import response has no per-row detail:**
-
-`{ created, skipped, errors }` (now also `createdTypes`/`createdUnits`) reports counts/summaries only — if a row fails validation, nothing tells the user which row or why. May need a richer response shape (e.g. per-row error messages) if this becomes a problem in practice.
-
-**2. `AutocompleteInput` is now unused:**
-
-`MeasurementForm` was the only consumer of `AutocompleteInput.svelte`. It's still in `src/components/ui/`. Either remove it or keep it if free-text type entry will be needed elsewhere (e.g. Import column mapper).
-
-**3. Containerize the frontend for testing and eventual production:**
+**1. Containerize the frontend for testing and eventual production:**
 
 The backend already builds to a Docker image; the frontend does not yet. Plan:
 - Add a multi-stage `Dockerfile` — build stage (`node`, `npm ci && npm run build`) producing `dist/`, then a slim static-serving stage (nginx or similar) that copies `dist/` in.
@@ -176,7 +188,7 @@ See `API_CONTRACT.md` for the full contract. Summary:
 ### Import
 | Method | Path | Response |
 |---|---|---|
-| `POST` | `/api/import` | `{ created, skipped, errors, createdTypes, createdUnits }` — auto-creates unknown types/units (case-insensitive match) |
+| `POST` | `/api/import` | `{ created, skipped, errors, rowErrors, createdTypes, createdUnits }` — auto-creates unknown types/units (case-insensitive match) |
 
 ---
 
@@ -229,7 +241,6 @@ src/
 │   └── ui/
 │       ├── Icon.svelte                 # inline SVG icon set
 │       ├── Modal.svelte
-│       ├── AutocompleteInput.svelte    # unused — kept or remove (see Unresolved #2)
 │       ├── Link.svelte                 # in-app navigation <a>, replaces svelte-routing's Link
 │       ├── Button.svelte
 │       └── EmptyState.svelte
@@ -244,6 +255,7 @@ src/
 ├── lib/
 │   ├── api.js
 │   ├── csv.js                    # PapaParse wrapper + guessMapping / applyMapping (unit-tested)
+│   ├── importReport.js           # groupRowErrors — per-row import failures for the Import page (unit-tested)
 │   ├── format.js
 │   ├── router.js                 # pure matchPath(pattern, path) route matcher (unit-tested)
 │   ├── summary.js                # latestByType / recentByType (unit-tested)
@@ -255,6 +267,7 @@ src/
     ├── browser.js
     ├── handlers.js                # MSW — predefined measurementTypes seed data
     ├── seed.js                    # demo people + ~8 months of measurements
+    ├── importValidate.js          # per-row import validation → rowErrors (unit-tested)
     └── importResolve.js           # case-insensitive type/unit lookup (unit matches abbreviation or label) + auto-create, used by the /api/import handler
 ```
 

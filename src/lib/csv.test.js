@@ -85,6 +85,16 @@ describe('applyMapping', () => {
     expect(typeof applyMapping(rows, mapping)[0].value).toBe('number');
   });
 
+  it('sends null for a blank or non-numeric value instead of 0/NaN', () => {
+    const bad = [
+      { ...rows[0], Reading: '' },
+      { ...rows[0], Reading: '  ' },
+      { ...rows[0], Reading: 'abc' },
+      { ...rows[0], Reading: ' 12.5 ' },
+    ];
+    expect(applyMapping(bad, mapping).map(r => r.value)).toEqual([null, null, null, 12.5]);
+  });
+
   it('skips fields with no mapped column', () => {
     const out = applyMapping(rows, { name: 'Person', value: 'Reading' })[0];
     expect(out).toEqual({ name: 'Ada', value: 170 });

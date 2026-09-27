@@ -56,7 +56,7 @@ Single `request(method, path, body)` helper. All calls use `credentials: 'includ
 |---|---|---|
 | `/` | `Dashboard.svelte` | Desktop: quick-add bar + `PeopleTable` (latest value + sparkline per type, column toggles, sort, Ctrl+K filter). Phone: `PersonCard` list with inline add form |
 | `/person/:id` | `PersonDetail.svelte` | Person switcher, time ranges, `TrendChart`, series tiles, CSV export, delete person, history; side panel with `MeasurementForm` + recent entries |
-| `/import` | `Import.svelte` | CSV bulk import with column mapper |
+| `/import` | `Import.svelte` | CSV bulk import with column mapper; lists rejected rows with reasons from `rowErrors` |
 | `/admin` | `Admin.svelte` | User management (create/delete); Measurement Types management (create/rename/delete type, create/edit/delete unit) |
 
 ### Key components
@@ -64,12 +64,12 @@ Single `request(method, path, body)` helper. All calls use `credentials: 'includ
 - **`MeasurementForm`** — used in the Dashboard quick-add bar (`people` prop adds a Person select; `layout="bar"`), phone cards, and the PersonDetail panel (`layout="stacked"`). Single `<select>` for unit, sourced from the `measurementTypes` store and grouped by type via `<optgroup>` (option text: `"<unit label> (<abbreviation>)"`). There is no separate type field — picking a unit sets the measurement's `type` to the parent type's label and `unit` to the chosen unit's abbreviation. Calls `onsubmit(data, { personId })`; after saving it clears only the value.
 - **`PeopleTable`** / **`Sparkline`** — desktop Dashboard table; sparklines draw `recentByType` values.
 - **`TrendChart`** — D3 multi-line chart, time x-axis, hover crosshair + tooltip. Draws the series it's given with per-series `styles` (`axis`, `color`, `dashed`) from `seriesStyles()`; at most two units, one per y-axis (right-axis lines dashed). Series selection/toggling (max two units — adding a third drops the oldest) lives in `src/lib/chartSeries.js`.
-- **`AutocompleteInput`** — unused free-text input with dropdown suggestions, kept in `src/components/ui/` in case free-text entry is needed elsewhere (e.g. Import column mapper).
 
 ### Utilities (`src/lib/`)
 
 - `api.js` — all fetch calls
-- `csv.js` — PapaParse + column mapping for import; `measurementsToCsv()` for export (re-importable)
+- `csv.js` — PapaParse + column mapping for import (blank/non-numeric `value` → `null`); `measurementsToCsv()` for export (re-importable)
+- `importReport.js` — `groupRowErrors()`: groups `POST /api/import`'s `rowErrors` per row with the row's original CSV text, for the Import page
 - `format.js` — number display and date formatting
 - `summary.js` — `summarizeMeasurements()` / `applyMeasurement()`: `latestByType` + `recentByType` (reference implementation of the `GET /api/people` summary; also used by the MSW mock)
 - `chartSeries.js` — series grouping (type+unit), selection toggling, axis/colour assignment, time ranges
@@ -78,7 +78,7 @@ Single `request(method, path, body)` helper. All calls use `credentials: 'includ
 
 ## Local Development Without the Backend
 
-MSW (`msw` devDependency) intercepts `/api/*` fetch calls in the browser. Define handlers in `src/mocks/handlers.js` mirroring the REST contract with in-memory state.
+MSW (`msw` devDependency) intercepts `/api/*` fetch calls in the browser. Define handlers in `src/mocks/handlers.js` mirroring the REST contract with in-memory state. Import rules that the backend must also implement live in their own tested modules: `importValidate.js` (per-row validation → `rowErrors`) and `importResolve.js` (case-insensitive type/unit lookup + auto-create).
 
 ## Data Model
 
