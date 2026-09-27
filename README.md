@@ -19,7 +19,7 @@ Create a `.env.local` file to point the app at your backend:
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
-To develop without a backend, set `VITE_API_BASE_URL=` (empty) to use the MSW mock handlers in `src/mocks/handlers.js` instead.
+To develop without a backend, set `VITE_API_BASE_URL=mock` to use the MSW mock handlers in `src/mocks/handlers.js` instead (an empty value routes `/api/*` through the Vite dev proxy to the backend). Mock mode starts with a few demo people and about eight months of measurements (`src/mocks/seed.js`); log in with the seeded user in `handlers.js` (password `pw`).
 
 ## Commands
 
@@ -27,7 +27,19 @@ To develop without a backend, set `VITE_API_BASE_URL=` (empty) to use the MSW mo
 npm run dev      # Start dev server (Vite HMR)
 npm run build    # Production build
 npm run preview  # Preview production build
+npm test         # Run unit tests (vitest)
 ```
+
+## Using the app
+
+The layout adapts to screen width (breakpoint 1024px):
+
+- **Desktop** — a persistent dark sidebar (People, Import CSV, Admin, your account and log out).
+  - **People** (`/`) is a table with one row per person and one column per measurement type, showing the latest value and a trend line of recent readings. The **Quick add** bar above it records a measurement for anyone; a row's **+ Add** pre-fills that person. Column chips hide/show types, the Person and Last entry headings sort, and `Ctrl/Cmd+K` focuses the name filter.
+  - **Person detail** (`/person/:id`) has a two-axis trend chart (hover for values), time-range buttons (1M–All), a tile per measurement that toggles it on the chart (two units at a time, one per axis), CSV export, and the full history. The right-hand panel records new measurements.
+- **Phone** — a top bar with a menu button that opens the same navigation as a slide-out drawer. People are shown as cards with an inline **Add** form; the person page stacks the same sections in one column.
+
+Styling uses the Figtree font (bundled via `@fontsource/figtree`, no external requests) and the colour tokens in `src/app.css`.
 
 ## Architecture
 
@@ -47,3 +59,4 @@ The `/import` route (`src/routes/Import.svelte`) lets you bulk-import measuremen
   - `date` — when the measurement was taken (sent to the backend as `measured_at`)
 - All five fields must be mapped before the import can be submitted. A preview of the first 10 parsed rows is shown before you import.
 - `type` and `unit` values don't need to already exist — unknown ones are created automatically (matched case-insensitively, so `Height` and `height` are treated as the same type). A `unit` cell also matches an existing unit by its full label, not just its abbreviation, so `Pounds` resolves to the seeded `lbs` unit instead of creating a duplicate. Any newly created types/units are listed after the import completes.
+- Invalid rows are skipped and the rest still import. After the import, any row that wasn't imported is listed with its row number (counting data rows, not the header), its original CSV values with the bad cells highlighted, and the reason(s): a missing name, type or unit, a blank or non-numeric value, or a date that isn't a real `YYYY-MM-DD` date.

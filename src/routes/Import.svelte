@@ -1,7 +1,13 @@
+<!--
+  CSV bulk import: pick a file, map its headers to the import fields, preview,
+  then POST /api/import. After an import, rows the backend rejected are listed
+  with their original CSV values and the reason(s) each one failed.
+-->
 <script>
   import Button from '../components/ui/Button.svelte';
   import * as api from '../lib/api.js';
   import { parseCsv, applyMapping, guessMapping, IMPORT_FIELDS } from '../lib/csv.js';
+  import { groupRowErrors } from '../lib/importReport.js';
   import { loadTypes } from '../stores/measurementTypes.svelte.js';
 
   let columns = $state([]);
@@ -10,6 +16,9 @@
   // and applyMapping consumes. The date field's key is `measured_at`, not `date`.
   let mapping = $state({});
   let result = $state(null);
+  // Rows the backend rejected, grouped per row (see groupRowErrors). Built at
+  // import time so later changes to the mapping don't alter what's shown.
+  let failedRows = $state([]);
   let error = $state('');
   let submitting = $state(false);
 
@@ -18,6 +27,7 @@
     if (!file) return;
     error = '';
     result = null;
+    failedRows = [];
     try {
       const parsed = await parseCsv(file);
       columns = parsed.columns;
@@ -38,6 +48,11 @@
     try {
       const mapped = applyMapping(rows, mapping);
       result = await api.importData({ rows: mapped });
+      failedRows = groupRowErrors(result.rowErrors, rows, mapping);
+      // The Import button sits below the mapping + preview, but the result
+      // banner and failed-rows table render at the top — bring them into view.
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
       if (result.createdTypes?.length || result.createdUnits?.length) {
         await loadTypes();
       }
@@ -58,7 +73,7 @@
   </div>
 
   {#if result}
-    <div class="result">
+    <div class="result" class:has-errors={result.errors > 0}>
       <p>Import complete: {result.created} created, {result.skipped} skipped, {result.errors} errors.</p>
       {#if result.createdTypes?.length}
         <p class="note">
@@ -73,6 +88,38 @@
         </p>
       {/if}
     </div>
+  {/if}
+
+  {#if failedRows.length}
+    <section class="failed">
+      <h2>{failedRows.length} row{failedRows.length > 1 ? 's' : ''} not imported</h2>
+      <p class="hint">Row numbers count data rows in your file, not including the header. Fix these rows and re-import just them.</p>
+      <div class="scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Row</th>
+              {#each IMPORT_FIELDS as field}<th>{field.label}</th>{/each}
+              <th>Problem</th>
+            </tr>
+          </thead>
+          <tbody>
+            {#each failedRows as row (row.rowNumber)}
+              {@const badFields = new Set(row.problems.map(p => p.field))}
+              <tr>
+                <td>{row.rowNumber}</td>
+                {#each IMPORT_FIELDS as field}
+                  <td class:bad={badFields.has(field.key)}>{row.values[field.key] ?? ''}</td>
+                {/each}
+                <td class="problems">
+                  {#each row.problems as problem}<div>{problem.message}</div>{/each}
+                </td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+      </div>
+    </section>
   {/if}
 
   {#if columns.length > 0}
@@ -138,7 +185,7 @@
   h2 { margin: 0 0 0.75rem; font-size: 1.1rem; }
   .dropzone {
     background: white;
-    border: 2px dashed #d1d5db;
+    border: 2px dashed var(--border);
     border-radius: 10px;
     padding: 2rem;
     display: flex;
@@ -147,17 +194,29 @@
     gap: 0.75rem;
   }
   label { font-weight: 500; cursor: pointer; }
-  .error { color: #dc2626; font-size: 0.875rem; margin: 0; }
-  .result { background: #d1fae5; border-radius: 6px; padding: 0.75rem 1rem; font-size: 0.9rem; }
+  .error { color: var(--danger); font-size: 0.875rem; margin: 0; }
+  .result {
+    background: var(--primary-tint);
+    border-radius: var(--radius-sm);
+    padding: 0.75rem 1rem;
+    font-size: 0.9rem;
+  }
+  .result.has-errors { background: var(--vital-tint); }
   .result p { margin: 0; }
-  .result .note { margin-top: 0.5rem; color: #065f46; }
+  .result .note { margin-top: 0.5rem; color: var(--primary-hover); }
+  .failed td.bad {
+    background: var(--vital-tint);
+    color: var(--danger);
+    font-weight: 600;
+  }
+  .failed td.problems { color: var(--danger); min-width: 14rem; }
   section {
-    background: white;
-    border: 1px solid #e5e7eb;
-    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
     padding: 1.25rem;
   }
-  .hint { margin: 0 0 0.75rem; font-size: 0.875rem; color: #6b7280; }
+  .hint { margin: 0 0 0.75rem; font-size: 0.875rem; color: var(--muted); }
   .map-table, .data-table {
     width: 100%;
     border-collapse: collapse;
@@ -166,12 +225,12 @@
   .map-table th, .map-table td,
   .data-table th, .data-table td {
     padding: 0.5rem 0.75rem;
-    border-bottom: 1px solid #e5e7eb;
+    border-bottom: 1px solid var(--border);
     text-align: left;
   }
   select {
     padding: 0.35rem 0.5rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border);
     border-radius: 4px;
   }
   .scroll { overflow-x: auto; }

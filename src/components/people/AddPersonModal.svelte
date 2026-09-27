@@ -39,7 +39,7 @@
       <textarea id="ap-notes" bind:value={notes} rows="3"></textarea>
     </div>
     <div class="actions">
-      <Button variant="secondary" onclick={onclose} type="button">Cancel</Button>
+      <Button variant="quiet" onclick={onclose} type="button">Cancel</Button>
       <Button type="submit" disabled={submitting || !name}>
         {submitting ? 'Adding…' : 'Add Person'}
       </Button>
@@ -61,11 +61,11 @@
   label {
     font-size: 0.85rem;
     font-weight: 500;
-    color: #374151;
+    color: var(--ink);
   }
   input, textarea {
     padding: 0.45rem 0.75rem;
-    border: 1px solid #d1d5db;
+    border: 1px solid var(--border);
     border-radius: 6px;
     font-size: 0.9rem;
     font-family: inherit;
@@ -78,7 +78,7 @@
     margin-top: 0.5rem;
   }
   .error {
-    color: #dc2626;
+    color: var(--danger);
     font-size: 0.875rem;
     margin: 0;
   }

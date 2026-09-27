@@ -16,7 +16,7 @@
     align-items: center;
     gap: 1rem;
     padding: 3rem 1rem;
-    color: #6b7280;
+    color: var(--muted);
     text-align: center;
   }
   .message {

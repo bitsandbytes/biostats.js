@@ -66,7 +66,7 @@ Return the currently authenticated user. Called on app load to restore session s
 
 ### `GET /api/people`
 
-Return all people with their latest measurement per type. Used to populate the Dashboard.
+Return all people with their latest measurement per type and a short recent history per type. Used to populate the Dashboard.
 
 - **Auth required:** Yes
 - **Response `200`:** `PersonSummary[]`
@@ -81,11 +81,18 @@ Return all people with their latest measurement per type. Used to populate the D
           "unit": "string",
           "measured_at": "YYYY-MM-DD"
         }
+      },
+      "recentByType": {
+        "<type>": [
+          { "value": 0.0, "unit": "string", "measured_at": "YYYY-MM-DD" }
+        ]
       }
     }
   ]
   ```
   `latestByType` is keyed by measurement type string (e.g. `"height"`, `"weight"`). Empty object `{}` if the person has no measurements. "Latest" means the entry with the greatest `measured_at` for that type.
+
+  `recentByType` has the same keys. Each value is that type's **12 most recent** measurements (by `measured_at`), ordered **oldest first**, so the last element equals `latestByType[type]`. Fewer than 12 if the person has fewer. Empty object `{}` if the person has no measurements. The Dashboard draws these as per-type trend lines; the frontend filters to entries whose `unit` matches the latest one, so mixed units within a type are allowed. The reference implementation is `summarizeMeasurements()` in `src/lib/summary.js` (`RECENT_LIMIT = 12`). A backend that omits this field still works — trend lines are simply not drawn.
 
 ---
 
@@ -367,6 +374,9 @@ Bulk-import measurements from a parsed CSV. The backend upserts persons by name 
     "created": 0,
     "skipped": 0,
     "errors": 0,
+    "rowErrors": [
+      { "row": 0, "field": "value", "message": "string" }
+    ],
     "createdTypes": [
       { "id": "uuid", "label": "string" }
     ],
@@ -381,7 +391,29 @@ Bulk-import measurements from a parsed CSV. The backend upserts persons by name 
     ]
   }
   ```
-  `created` — rows successfully inserted. `skipped` — rows that were duplicates or otherwise not inserted. `errors` — rows that failed validation or processing. `createdTypes` / `createdUnits` — the `MeasurementType`s and `Unit`s newly created *by this import call* (see below). Each appears at most once, even if matched by multiple rows. Omit or return empty arrays when nothing new was created.
+  `created` — rows successfully inserted. `skipped` — rows that were duplicates or otherwise not inserted. `errors` — rows that failed validation or processing. `rowErrors` — one entry per problem on a failed row (see **Row validation** below); a row with several problems has several entries, so `errors` equals the number of *distinct* `row` values, not `rowErrors.length`. Always present; empty when every row succeeded. `createdTypes` / `createdUnits` — the `MeasurementType`s and `Unit`s newly created *by this import call* (see below). Each appears at most once, even if matched by multiple rows. Omit or return empty arrays when nothing new was created.
+
+#### Row validation
+
+Each row is validated **before** anything is created for it. A row that fails validation is not inserted and does not create a person, type or unit; it counts toward `errors` and is reported in `rowErrors`. Other rows are still imported — one bad row never fails the whole request.
+
+Each `rowErrors` entry is:
+
+| Field | Type | Meaning |
+|---|---|---|
+| `row` | integer | 0-based index of the row in the request's `rows` array |
+| `field` | string \| null | The offending payload field (`name`, `type`, `value`, `unit`, `measured_at`), or `null` for a failure not tied to one field (e.g. an unexpected server error while inserting) |
+| `message` | string | Human-readable reason, shown to the user as-is |
+
+Rules — report **every** failing rule for a row, in this field order:
+
+1. `name` — required; must not be blank after trimming. → `"Name is required."`
+2. `type` — required; must not be blank after trimming. → `"Type is required."`
+3. `value` — must be a finite JSON number. The frontend sends `null` for a blank or non-numeric CSV cell. → `"Value is missing or not a number."`
+4. `unit` — required; must not be blank after trimming. → `"Unit is required."`
+5. `measured_at` — required (`"Date is required."`), must match `YYYY-MM-DD` (`"Date \"<value>\" must be in YYYY-MM-DD form."`), and must be a real calendar date, e.g. not `2026-02-30` (`"Date \"<value>\" is not a real date."`).
+
+The messages above are what the MSW mock returns (`src/mocks/importValidate.js`); the backend doesn't have to match them word for word, but should say the same thing. Person names are trimmed before the upsert-by-name lookup.
 
 #### Auto-creation of types and units
 
@@ -484,6 +516,7 @@ PersonSummary
   id          uuid
   name        string
   latestByType  map<string, { value, unit, measured_at }>
+  recentByType  map<string, { value, unit, measured_at }[]>   up to 12 per type, oldest first
 
 PersonDetail
   id            uuid

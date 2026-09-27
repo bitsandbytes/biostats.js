@@ -1,5 +1,8 @@
 import { http, HttpResponse } from 'msw';
 import { resolveTypeAndUnit } from './importResolve.js';
+import { validateImportRow } from './importValidate.js';
+import { summarizeMeasurements } from '../lib/summary.js';
+import { seedPeople } from './seed.js';
 
 // --- seed data ---
 const users = [
@@ -37,17 +40,14 @@ let sessionUserId = null;
 let nextId = 1;
 const uid = () => `gen-${nextId++}`;
 
+// Demo people + ~6 months of measurements so the Dashboard trend lines and
+// PersonDetail chart have something to show in mock mode.
+seedPeople(people, measurements);
+
 // --- helpers ---
-function latestByType(personId) {
-  const byType = {};
-  for (const m of measurements) {
-    if (m.person_id !== personId) continue;
-    const cur = byType[m.type];
-    if (!cur || m.measured_at > cur.measured_at) {
-      byType[m.type] = { value: m.value, unit: m.unit, measured_at: m.measured_at };
-    }
-  }
-  return byType;
+/** PersonSummary fields (`latestByType`, `recentByType`) for one person. */
+function summaryFor(personId) {
+  return summarizeMeasurements(measurements.filter(m => m.person_id === personId));
 }
 
 function requireSession() {
@@ -119,7 +119,7 @@ export const handlers = [
   http.get('/api/people', () => {
     const denied = requireSession();
     if (denied) return denied;
-    return HttpResponse.json(people.map(p => ({ ...p, latestByType: latestByType(p.id) })));
+    return HttpResponse.json(people.map(p => ({ ...p, ...summaryFor(p.id) })));
   }),
 
   http.post('/api/people', async ({ request }) => {
@@ -257,6 +257,9 @@ export const handlers = [
   }),
 
   // Import
+  // Each row is validated first (see importValidate.js); an invalid row is not
+  // inserted and never creates a person/type/unit. Every problem is reported
+  // in `rowErrors` as { row: <0-based index into `rows`>, field, message }.
   http.post('/api/import', async ({ request }) => {
     const denied = requireSession();
     if (denied) return denied;
@@ -264,11 +267,19 @@ export const handlers = [
     let created = 0, skipped = 0, errors = 0;
     const createdTypes = [];
     const createdUnits = [];
-    for (const row of rows) {
+    const rowErrors = [];
+    rows.forEach((row, index) => {
+      const problems = validateImportRow(row);
+      if (problems.length) {
+        errors++;
+        problems.forEach(p => rowErrors.push({ row: index, ...p }));
+        return;
+      }
       try {
-        let person = people.find(p => p.name === row.name);
+        const name = row.name.trim();
+        let person = people.find(p => p.name === name);
         if (!person) {
-          person = { id: uid(), name: row.name, notes: '', created_at: new Date().toISOString() };
+          person = { id: uid(), name, notes: '', created_at: new Date().toISOString() };
           people.push(person);
         }
         const { type, unit, created: newlyCreated } = resolveTypeAndUnit(
@@ -286,10 +297,11 @@ export const handlers = [
           created_at: new Date().toISOString(),
         });
         created++;
-      } catch {
+      } catch (err) {
         errors++;
+        rowErrors.push({ row: index, field: null, message: err?.message ?? 'Unexpected error.' });
       }
-    }
-    return HttpResponse.json({ created, skipped, errors, createdTypes, createdUnits });
+    });
+    return HttpResponse.json({ created, skipped, errors, rowErrors, createdTypes, createdUnits });
   }),
 ];
