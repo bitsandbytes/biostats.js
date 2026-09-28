@@ -70,7 +70,7 @@ All routes and components are implemented and working against a real backend (vi
   - `npm test` (92 passing) and `npm run build` (no warnings) are green. Verified in headless Chrome in mock mode: a CSV with 2 good and 3 bad rows imported 2 and listed the 3 failures with the correct reasons, with no console errors.
 - **Removed the unused `AutocompleteInput.svelte`.**
 - **Import scrolls back to the top on completion** so the result banner and failed-rows table are visible, since the Import button is at the bottom below the preview. Scrolling is smooth unless the user prefers reduced motion. It doesn't scroll on a request failure, because that error shows next to the button. Verified in headless Chrome (scrollY 125 → 0).
-- The router change and the redesign are committed (`1866aad`). The backend now implements `recentByType` and the import unit-label matching.
+- The router change and the redesign are committed (`1866aad`). The backend now implements `recentByType`, the import unit-label matching, and `rowErrors` with the per-row import validation rules.
 
 ### In Progress
 
@@ -78,13 +78,12 @@ Nothing in progress.
 
 ### Next Step to Pick Up From
 
-1. **Backend:** implement `rowErrors` and the per-row validation rules on `POST /api/import`, following "Row validation" in `API_CONTRACT.md`. Until then the real backend returns no `rowErrors`, and the Import page shows only the counts (it tolerates the field being absent).
-2. **Restrict person deletion to admins and the person's creator** (not urgent). Today any logged-in user can delete any person, and nothing records who created a person. This needs:
+1. **Restrict person deletion to admins and the person's creator** (not urgent). Today any logged-in user can delete any person, and nothing records who created a person. This needs:
    - a `created_by` user id on `Person`, set by `POST /api/people`. Decide what import-created people get: the importing user is the natural choice.
    - `DELETE /api/people/:id` returning `403` unless the caller is an admin or the creator, documented in `API_CONTRACT.md` and matched in the MSW mock.
    - the delete button on `PersonDetail` shown only when allowed. That means either exposing `created_by` on `PersonDetail`/`PersonSummary`, or having the backend return a `canDelete` flag.
 
-3. **Store every measurement in metric and display it in each user's preferred units.** Right now a measurement keeps whatever unit it was entered in, so a person's weight history can mix `kg` and `lbs`, and charts plot them as separate series. This is a significant change and will probably mean re-architecting how admin-managed types and units work, since a lot of effort went into letting users add arbitrary types and units. Open questions:
+2. **Store every measurement in metric and display it in each user's preferred units.** Right now a measurement keeps whatever unit it was entered in, so a person's weight history can mix `kg` and `lbs`, and charts plot them as separate series. This is a significant change and will probably mean re-architecting how admin-managed types and units work, since a lot of effort went into letting users add arbitrary types and units. Open questions:
    - Every unit needs a conversion to a canonical base unit for its type: a factor, or an offset + factor for temperature.
    - What happens to user-added types that have no metric equivalent (e.g. `bpm`, a free-form score)? Does each type declare a base unit?
    - Add a per-user display preference (metric / imperial, or per type) on `User` / `GET /api/auth/me`.
