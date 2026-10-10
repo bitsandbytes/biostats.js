@@ -90,6 +90,18 @@ textarea {
   height: auto;
   padding: 0.5rem 0.75rem;
 }
+/* iOS (Safari, and Chrome, which uses the same engine there) zooms the page in
+   when a field with text under 16px gets focus, and doesn't zoom back out, so
+   the next page appears zoomed and scrolled. On touch devices, keep every form
+   field at 16px. !important is needed because components shrink fields in
+   their own scoped styles (e.g. Login, Admin), which outrank a plain global
+   rule. Don't "fix" this with maximum-scale=1 in the viewport meta: on Android
+   that also disables pinch-zoom. */
+@media (pointer: coarse) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
 input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -1px;

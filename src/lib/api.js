@@ -10,6 +10,31 @@ import { resolveApiBase } from './apiBase.js';
 
 const BASE = resolveApiBase(import.meta.env.VITE_API_BASE_URL);
 
+// Paths whose 401 means something other than "the session has expired":
+// a wrong password on login, and the session check at startup, which already
+// treats 401 as "logged out".
+const SESSION_401_EXEMPT = new Set(['/api/auth/login', '/api/auth/me']);
+
+let unauthorizedHandler = null;
+
+/**
+ * Registers the function to call when a request gets a 401, meaning the
+ * session has expired or the browser didn't send the cookie. The auth store
+ * uses it to log the user out, so every page returns to the login screen
+ * instead of failing in its own way. Pass null to clear it.
+ */
+export function onUnauthorized(handler) {
+  unauthorizedHandler = handler;
+}
+
+/**
+ * Sends a request and returns the parsed JSON (null for 204).
+ *
+ * On a non-2xx response it throws the parsed error body with `status` added
+ * (`{ error, message, status }`). If the body isn't JSON, for example a proxy's
+ * HTML error page, it throws `{ status }`. A network failure, where no
+ * response arrives, rejects with fetch's own TypeError.
+ */
 async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {
     method,
@@ -17,8 +42,23 @@ async function request(method, path, body) {
     credentials: 'include',
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw await res.json();
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => null);
+    if (res.status === 401 && !SESSION_401_EXEMPT.has(path)) unauthorizedHandler?.();
+    throw { ...(errBody && typeof errBody === 'object' ? errBody : {}), status: res.status };
+  }
   return res.status === 204 ? null : res.json();
+}
+
+/**
+ * Turns anything `request()` can throw into text to show the user: the
+ * backend's `message`, then its `error`, then `fallback`. A network failure
+ * gets its own explanation, because "Load failed" / "Failed to fetch" means
+ * nothing to a user.
+ */
+export function errorMessage(err, fallback) {
+  if (err instanceof TypeError) return 'Could not reach the server. Check your connection and try again.';
+  return err?.message || err?.error || fallback;
 }
 
 export const login                  = (data)       => request('POST',   '/api/auth/login', data);

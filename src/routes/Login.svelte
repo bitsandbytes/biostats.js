@@ -14,6 +14,10 @@
     error = '';
     try {
       await login(email, password);
+      // On phones the keyboard (and any zoom) scrolled the page to the form.
+      // Close the keyboard and start the app at the top.
+      document.activeElement?.blur();
+      window.scrollTo(0, 0);
     } catch {
       error = 'Invalid email or password.';
     } finally {

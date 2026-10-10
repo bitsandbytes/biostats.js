@@ -79,10 +79,21 @@ All routes and components are implemented and working against a real backend (vi
   - `npm test` (100 passing) is green. Builds were verified with a valid URL (compiled in), with a scheme-less value (build fails), and with an empty value (warning).
   - **Not yet verified end-to-end**: this depends on the backend's CORS and cookie config.
 
+- **Cross-origin session fixed by hosting**: the frontend (Cloudflare) and backend (Render) are now behind one custom domain, so the session cookie is first-party. Before, iOS/WebKit blocked it as a third-party cookie, and on a real iPhone every request after login got a 401.
+- **Dashboard no longer hangs on "Loading…" when a request fails** (seen on iPhone while the cookie was being blocked):
+  - `src/lib/api.js`: errors thrown by `request()` now carry `status`, so `{ ...body, status }` is thrown and a non-JSON error body becomes `{ status }`. Previously a non-JSON body made `res.json()` itself throw. A new `onUnauthorized(handler)` hook runs on any 401 except from `/api/auth/login` (wrong password) and `/api/auth/me` (the startup session check). A new `errorMessage(err, fallback)` helper gives a user-facing message, including one for network failures.
+  - `src/stores/auth.svelte.js` registers the handler to clear `auth.session`, so an expired or missing session returns to `<Login>` from any page.
+  - `Dashboard.svelte`: load failures show an error card with a Retry button instead of leaving "Loading…" up forever.
+  - Tests in `src/lib/api.test.js` (new). `npm test` (108 passing) and `npm run build` are green. Verified in headless Chrome at 390×844 in mock mode with `/api/people` stubbed: 500 shows the error, Retry recovers, 401 returns to login, and there are no page errors.
+
+- **iPhone: page left zoomed in and scrolled after login.** iOS (Safari and Chrome) zooms in when a field with text under 16px gets focus, and the zoom carried over to the People page.
+  - `src/app.css`: `@media (pointer: coarse)` forces 16px on `input`/`select`/`textarea`. `!important` is needed because components set smaller sizes in their scoped styles. We deliberately didn't use `maximum-scale=1`, since it disables pinch-zoom on Android.
+  - `Login.svelte` blurs the focused field and scrolls to the top after a successful login.
+  - Verified in headless Chrome: a touch viewport gets 16px fields, desktop keeps 14.4/15.2px, and scrollY is 0 after login. **Still needs a check on a real iPhone.**
+
 ### In Progress
 
-**Backend CORS / cross-origin session**, needed before the deployed frontend can log in. The backend has to implement the "Cross-origin deployment" section of `API_CONTRACT.md`. Decide whether frontend and backend will share a registrable domain, e.g. a custom domain for the Worker such as `app.<domain>` alongside `api.<domain>`. If they don't, Safari and Firefox (strict mode) will block the session cookie. The fallback would be switching the frontend to `Authorization: Bearer` with the login `token`, which the contract already allows.
-
+Nothing in progress.
 
 ### Next Step to Pick Up From
 

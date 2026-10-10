@@ -48,7 +48,7 @@ Per-person measurement history is **not** in global state — it is fetched on d
 
 ### API (`src/lib/api.js`)
 
-Single `request(method, path, body)` helper. All calls use `credentials: 'include'` (session cookie). Throws the parsed JSON body on non-OK responses. This file is the source of truth for the REST contract; the Java/Spring Boot backend implements it.
+Single `request(method, path, body)` helper. All calls use `credentials: 'include'` (session cookie). On non-OK responses it throws the parsed JSON body with `status` added (`{ status }` if the body isn't JSON). Any 401 except from login or `/api/auth/me` calls the `onUnauthorized` handler, which `auth.svelte.js` uses to clear the session (back to `<Login>`). Use `errorMessage(err, fallback)` for user-facing error text. This file is the source of truth for the REST contract; the Java/Spring Boot backend implements it.
 
 ### Routes
 

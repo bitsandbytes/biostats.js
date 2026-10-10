@@ -4,7 +4,7 @@ The frontend is the source of truth for this contract. The Java/Spring Boot back
 
 All endpoints except `/api/auth/login` require a valid session cookie (`credentials: include`) or `Authorization: Bearer <token>` header. The frontend sends `credentials: 'include'` on every request via the shared `request()` helper in `src/lib/api.js`.
 
-Non-2xx responses return a JSON error body. The frontend throws the parsed body directly.
+Non-2xx responses return a JSON error body. The frontend throws the parsed body, with the HTTP `status` added. A `401` from any endpoint other than `/api/auth/login` and `/api/auth/me` is treated as an expired session, and the user is sent back to the login screen.
 
 ### Cross-origin deployment
 

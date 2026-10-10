@@ -18,6 +18,7 @@
   import Icon from '../components/ui/Icon.svelte';
   import EmptyState from '../components/ui/EmptyState.svelte';
   import { capitalize } from '../lib/display.js';
+  import { errorMessage } from '../lib/api.js';
 
   let showAddModal = $state(false);
   let loading = $state(true);
@@ -28,10 +29,24 @@
   let searchInput = $state();
   let quickBar = $state();
 
-  onMount(async () => {
-    await Promise.all([loadPeople(), loadTypes()]);
-    loading = false;
-  });
+  let loadError = $state('');
+
+  // Fetches people and measurement types. A failure is shown with a Retry
+  // button instead of leaving "Loading…" up forever. A 401 never reaches the
+  // page: api.js logs the user out and App.svelte switches to <Login>.
+  async function load() {
+    loading = true;
+    loadError = '';
+    try {
+      await Promise.all([loadPeople(), loadTypes()]);
+    } catch (err) {
+      loadError = errorMessage(err, 'Could not load people.');
+    } finally {
+      loading = false;
+    }
+  }
+
+  onMount(load);
 
   let filtered = $derived(
     peopleStore.people.filter(p => p.name.toLowerCase().includes(query.trim().toLowerCase()))
@@ -106,6 +121,11 @@
 
   {#if loading}
     <p class="loading">Loading…</p>
+  {:else if loadError}
+    <div class="card load-error" role="alert">
+      <p>{loadError}</p>
+      <Button onclick={load}>Retry</Button>
+    </div>
   {:else if peopleStore.people.length === 0}
     <EmptyState message="No people yet. Add someone to start tracking measurements." />
   {:else if desktop.current}
@@ -144,7 +164,7 @@
     </div>
   {/if}
 
-  {#if !loading && peopleStore.people.length > 0 && filtered.length === 0}
+  {#if !loading && !loadError && peopleStore.people.length > 0 && filtered.length === 0}
     <p class="loading">No one matches “{query}”.</p>
   {/if}
 
@@ -271,6 +291,17 @@
     display: flex;
     flex-direction: column;
     gap: 14px;
+  }
+  .load-error {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 14px 16px;
+  }
+  .load-error p {
+    margin: 0;
+    color: var(--danger);
   }
   .hint, .loading {
     margin: 0;
