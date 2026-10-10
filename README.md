@@ -30,6 +30,18 @@ npm run preview  # Preview production build
 npm test         # Run unit tests (vitest)
 ```
 
+## Deploying (Cloudflare)
+
+The production site is a Cloudflare Worker that serves only static assets, so it has no runtime configuration. The backend origin is compiled into the bundle, which means it has to be set as a **build variable** (Workers Builds → Settings → Variables and secrets → *Build*), not as a Worker runtime variable:
+
+```
+VITE_API_BASE_URL=https://api.example.com
+```
+
+Build variables take priority over the committed `.env.local`. `npm run build` checks the value: anything other than empty, `mock`, or an absolute `http(s)://` URL fails the build. An empty value prints a warning, because a static host has nothing that answers same-origin `/api/*`. A trailing slash is fine. The build log prints `API base URL: …` so you can confirm what got compiled in. Changing the value requires a rebuild.
+
+The backend runs on a different origin, so it has to allow this site via CORS with credentials, and its session cookie must be usable cross-origin. See **Cross-origin deployment** in `API_CONTRACT.md`.
+
 ## Using the app
 
 The layout adapts to screen width (breakpoint 1024px):

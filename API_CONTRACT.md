@@ -6,6 +6,16 @@ All endpoints except `/api/auth/login` require a valid session cookie (`credenti
 
 Non-2xx responses return a JSON error body. The frontend throws the parsed body directly.
 
+### Cross-origin deployment
+
+In production, the frontend (static Cloudflare Worker) and the backend are on different origins. The frontend calls `${VITE_API_BASE_URL}/api/...` with `credentials: 'include'` and `Content-Type: application/json`, so every non-GET request (and every request carrying that header) triggers a CORS preflight. The backend must:
+
+- answer `OPTIONS` preflights for `/api/**` **without** requiring auth;
+- send `Access-Control-Allow-Origin: <exact frontend origin>` (not `*`, which browsers reject with credentials) and `Access-Control-Allow-Credentials: true`;
+- allow methods `GET, POST, PUT, DELETE` and request header `Content-Type`;
+- keep the allowed frontend origin(s) in config (e.g. an env var), not hard-coded;
+- issue the session cookie with `Secure`. If the frontend and backend are on **different sites** (different registrable domains, e.g. `*.workers.dev` vs `example.com`), it also needs `SameSite=None`. Note that Safari, and Firefox in strict mode, block such third-party cookies regardless. If they share a registrable domain (e.g. `app.example.com` and `api.example.com`), the cookie is first-party, so `SameSite=Lax` works and no browser blocks it. That setup is strongly preferred.
+
 ---
 
 ## Auth

@@ -1,9 +1,10 @@
 import { mount } from 'svelte';
 import './app.css';
 import App from './App.svelte';
+import { isMockMode } from './lib/apiBase.js';
 
 async function prepare() {
-  if (import.meta.env.VITE_API_BASE_URL === 'mock') {
+  if (isMockMode(import.meta.env.VITE_API_BASE_URL)) {
     const { worker } = await import('./mocks/browser.js');
     await worker.start({ onUnhandledRequest: 'bypass' });
   }

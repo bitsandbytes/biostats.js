@@ -72,9 +72,17 @@ All routes and components are implemented and working against a real backend (vi
 - **Import scrolls back to the top on completion** so the result banner and failed-rows table are visible, since the Import button is at the bottom below the preview. Scrolling is smooth unless the user prefers reduced motion. It doesn't scroll on a request failure, because that error shows next to the button. Verified in headless Chrome (scrollY 125 → 0).
 - The router change and the redesign are committed (`1866aad`). The backend now implements `recentByType`, the import unit-label matching, and `rowErrors` with the per-row import validation rules.
 
+- **Backend base URL for the Cloudflare deployment.** The frontend is deployed as a static-assets-only Cloudflare Worker, and the backend is on a different domain. The Worker has no runtime config, so the backend origin is set with the `VITE_API_BASE_URL` Cloudflare *build* variable and compiled in.
+  - `src/lib/apiBase.js` (new, unit-tested): `resolveApiBase()` normalizes the value. It handles empty/mock as same-origin, strips trailing slashes, and throws on anything that isn't an absolute http(s) URL. `isMockMode()` is also defined there. Both `api.js` and `main.js` use it.
+  - `vite.config.js` validates the value during `vite build`: a malformed value fails the build, an empty value or `mock` prints a warning, and otherwise the build prints `API base URL: …`.
+  - `README.md` has a new "Deploying (Cloudflare)" section. `API_CONTRACT.md` has a new "Cross-origin deployment" section describing the CORS and cookie requirements for the backend.
+  - `npm test` (100 passing) is green. Builds were verified with a valid URL (compiled in), with a scheme-less value (build fails), and with an empty value (warning).
+  - **Not yet verified end-to-end**: this depends on the backend's CORS and cookie config.
+
 ### In Progress
 
-Nothing in progress.
+**Backend CORS / cross-origin session**, needed before the deployed frontend can log in. The backend has to implement the "Cross-origin deployment" section of `API_CONTRACT.md`. Decide whether frontend and backend will share a registrable domain, e.g. a custom domain for the Worker such as `app.<domain>` alongside `api.<domain>`. If they don't, Safari and Firefox (strict mode) will block the session cookie. The fallback would be switching the frontend to `Authorization: Bearer` with the login `token`, which the contract already allows.
+
 
 ### Next Step to Pick Up From
 
@@ -94,7 +102,7 @@ Nothing in progress.
 
 ## Unresolved / Needs Decision
 
-**1. Containerize the frontend for testing and eventual production:**
+**1. Containerize the frontend for local integration testing** (production is now a static Cloudflare Worker, see Complete; the runtime-config notes below only apply if a container is ever used for production):
 
 The backend already builds to a Docker image; the frontend does not yet. Plan:
 - Add a multi-stage `Dockerfile` — build stage (`node`, `npm ci && npm run build`) producing `dist/`, then a slim static-serving stage (nginx or similar) that copies `dist/` in.
