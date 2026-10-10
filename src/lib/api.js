@@ -1,5 +1,14 @@
-const envBase = import.meta.env.VITE_API_BASE_URL;
-const BASE = envBase === 'mock' ? '' : envBase;
+/**
+ * All REST calls to the backend. This file is the source of truth for the
+ * REST contract (see API_CONTRACT.md).
+ *
+ * BASE is the backend origin from VITE_API_BASE_URL (see apiBase.js), or ''
+ * for same-origin calls. Every request sends cookies (`credentials: 'include'`),
+ * which also works cross-origin as long as the backend's CORS allows it.
+ */
+import { resolveApiBase } from './apiBase.js';
+
+const BASE = resolveApiBase(import.meta.env.VITE_API_BASE_URL);
 
 async function request(method, path, body) {
   const res = await fetch(`${BASE}${path}`, {

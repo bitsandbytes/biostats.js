@@ -70,21 +70,28 @@ All routes and components are implemented and working against a real backend (vi
   - `npm test` (92 passing) and `npm run build` (no warnings) are green. Verified in headless Chrome in mock mode: a CSV with 2 good and 3 bad rows imported 2 and listed the 3 failures with the correct reasons, with no console errors.
 - **Removed the unused `AutocompleteInput.svelte`.**
 - **Import scrolls back to the top on completion** so the result banner and failed-rows table are visible, since the Import button is at the bottom below the preview. Scrolling is smooth unless the user prefers reduced motion. It doesn't scroll on a request failure, because that error shows next to the button. Verified in headless Chrome (scrollY 125 → 0).
-- The router change and the redesign are committed (`1866aad`). The backend now implements `recentByType` and the import unit-label matching.
+- The router change and the redesign are committed (`1866aad`). The backend now implements `recentByType`, the import unit-label matching, and `rowErrors` with the per-row import validation rules.
+
+- **Backend base URL for the Cloudflare deployment.** The frontend is deployed as a static-assets-only Cloudflare Worker, and the backend is on a different domain. The Worker has no runtime config, so the backend origin is set with the `VITE_API_BASE_URL` Cloudflare *build* variable and compiled in.
+  - `src/lib/apiBase.js` (new, unit-tested): `resolveApiBase()` normalizes the value. It handles empty/mock as same-origin, strips trailing slashes, and throws on anything that isn't an absolute http(s) URL. `isMockMode()` is also defined there. Both `api.js` and `main.js` use it.
+  - `vite.config.js` validates the value during `vite build`: a malformed value fails the build, an empty value or `mock` prints a warning, and otherwise the build prints `API base URL: …`.
+  - `README.md` has a new "Deploying (Cloudflare)" section. `API_CONTRACT.md` has a new "Cross-origin deployment" section describing the CORS and cookie requirements for the backend.
+  - `npm test` (100 passing) is green. Builds were verified with a valid URL (compiled in), with a scheme-less value (build fails), and with an empty value (warning).
+  - **Not yet verified end-to-end**: this depends on the backend's CORS and cookie config.
 
 ### In Progress
 
-Nothing in progress.
+**Backend CORS / cross-origin session**, needed before the deployed frontend can log in. The backend has to implement the "Cross-origin deployment" section of `API_CONTRACT.md`. Decide whether frontend and backend will share a registrable domain, e.g. a custom domain for the Worker such as `app.<domain>` alongside `api.<domain>`. If they don't, Safari and Firefox (strict mode) will block the session cookie. The fallback would be switching the frontend to `Authorization: Bearer` with the login `token`, which the contract already allows.
+
 
 ### Next Step to Pick Up From
 
-1. **Backend:** implement `rowErrors` and the per-row validation rules on `POST /api/import`, following "Row validation" in `API_CONTRACT.md`. Until then the real backend returns no `rowErrors`, and the Import page shows only the counts (it tolerates the field being absent).
-2. **Restrict person deletion to admins and the person's creator** (not urgent). Today any logged-in user can delete any person, and nothing records who created a person. This needs:
+1. **Restrict person deletion to admins and the person's creator** (not urgent). Today any logged-in user can delete any person, and nothing records who created a person. This needs:
    - a `created_by` user id on `Person`, set by `POST /api/people`. Decide what import-created people get: the importing user is the natural choice.
    - `DELETE /api/people/:id` returning `403` unless the caller is an admin or the creator, documented in `API_CONTRACT.md` and matched in the MSW mock.
    - the delete button on `PersonDetail` shown only when allowed. That means either exposing `created_by` on `PersonDetail`/`PersonSummary`, or having the backend return a `canDelete` flag.
 
-3. **Store every measurement in metric and display it in each user's preferred units.** Right now a measurement keeps whatever unit it was entered in, so a person's weight history can mix `kg` and `lbs`, and charts plot them as separate series. This is a significant change and will probably mean re-architecting how admin-managed types and units work, since a lot of effort went into letting users add arbitrary types and units. Open questions:
+2. **Store every measurement in metric and display it in each user's preferred units.** Right now a measurement keeps whatever unit it was entered in, so a person's weight history can mix `kg` and `lbs`, and charts plot them as separate series. This is a significant change and will probably mean re-architecting how admin-managed types and units work, since a lot of effort went into letting users add arbitrary types and units. Open questions:
    - Every unit needs a conversion to a canonical base unit for its type: a factor, or an offset + factor for temperature.
    - What happens to user-added types that have no metric equivalent (e.g. `bpm`, a free-form score)? Does each type declare a base unit?
    - Add a per-user display preference (metric / imperial, or per type) on `User` / `GET /api/auth/me`.
@@ -95,7 +102,7 @@ Nothing in progress.
 
 ## Unresolved / Needs Decision
 
-**1. Containerize the frontend for testing and eventual production:**
+**1. Containerize the frontend for local integration testing** (production is now a static Cloudflare Worker, see Complete; the runtime-config notes below only apply if a container is ever used for production):
 
 The backend already builds to a Docker image; the frontend does not yet. Plan:
 - Add a multi-stage `Dockerfile` — build stage (`node`, `npm ci && npm run build`) producing `dist/`, then a slim static-serving stage (nginx or similar) that copies `dist/` in.
