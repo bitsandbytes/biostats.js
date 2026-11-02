@@ -4,7 +4,7 @@ The frontend is the source of truth for this contract. The Java/Spring Boot back
 
 All endpoints except `/api/auth/login` require a valid session cookie (`credentials: include`) or `Authorization: Bearer <token>` header. The frontend sends `credentials: 'include'` on every request via the shared `request()` helper in `src/lib/api.js`.
 
-Non-2xx responses return a JSON error body. The frontend throws the parsed body, with the HTTP `status` added. A `401` from any endpoint other than `/api/auth/login` and `/api/auth/me` is treated as an expired session, and the user is sent back to the login screen.
+Non-2xx responses return a JSON error body. The frontend throws the parsed body directly.
 
 ### Cross-origin deployment
 
@@ -15,6 +15,15 @@ In production, the frontend (static Cloudflare Worker) and the backend are on di
 - allow methods `GET, POST, PUT, DELETE` and request header `Content-Type`;
 - keep the allowed frontend origin(s) in config (e.g. an env var), not hard-coded;
 - issue the session cookie with `Secure`. If the frontend and backend are on **different sites** (different registrable domains, e.g. `*.workers.dev` vs `example.com`), it also needs `SameSite=None`. Note that Safari, and Firefox in strict mode, block such third-party cookies regardless. If they share a registrable domain (e.g. `app.example.com` and `api.example.com`), the cookie is first-party, so `SameSite=Lax` works and no browser blocks it. That setup is strongly preferred.
+
+### API documentation endpoints (backend only)
+
+The backend also serves a machine-readable description of this contract. These routes are public (no auth), are not used by the frontend, and can be disabled with `API_DOCS_ENABLED=false`:
+
+- `GET /v3/api-docs` — OpenAPI 3 spec (JSON), generated from the controllers
+- `GET /swagger-ui/index.html` — interactive Swagger UI for that spec
+
+This document remains the source of truth; the generated spec describes the same endpoints.
 
 ---
 

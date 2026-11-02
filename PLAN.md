@@ -91,6 +91,15 @@ All routes and components are implemented and working against a real backend (vi
   - `Login.svelte` blurs the focused field and scrolls to the top after a successful login.
   - Verified in headless Chrome: a touch viewport gets 16px fields, desktop keeps 14.4/15.2px, and scrollY is 0 after login. **Still needs a check on a real iPhone.**
 
+- **Login form input conveniences** (`Login.svelte`):
+  - The email field uses `autocomplete="username"`, so password managers pair it with `current-password`. It also has `name` attributes, turns off autocapitalise, autocorrect and spellcheck, and its return key says "Next" and moves to the password field (it submits instead if the password is already filled in). The password field's return key says "Go".
+  - Once "@" is typed, a `<datalist>` suggests common email domains, using `emailSuggestions()` in the new, tested `src/lib/emailSuggest.js`.
+  - The password field has a show/hide toggle, with new `eye`/`eye-off` icons.
+  - Fields have 44px touch targets. The email field gets focus on load on desktop only, so it doesn't pop up the phone keyboard. The email is trimmed before it's sent.
+  - A 401 shows "Invalid email or password". Any other failure (server or network) shows its own message, so the user doesn't think they mistyped.
+  - `npm test` (116 passing) and `npm run build` are green. Checked in headless Chrome at 390×844: the attributes render and the layout is correct.
+  - **Passkeys not done**: they need backend WebAuthn endpoints. See Unresolved.
+
 ### In Progress
 
 Nothing in progress.
@@ -112,6 +121,10 @@ Nothing in progress.
 ---
 
 ## Unresolved / Needs Decision
+
+**0. Passkey sign-in.** This needs WebAuthn endpoints in `API_CONTRACT.md` and the backend: registration options and verification for a logged-in user, then authentication options and verification that start a session. On the frontend it needs `navigator.credentials` calls, `autocomplete="username webauthn"` with conditional mediation on the login email field, and a "Add a passkey" action for the signed-in user.
+
+**0b. API_CONTRACT error-handling line.** The uncommitted contract edit says "The frontend throws the parsed body directly", which drops the `status` on thrown errors and the 401 → login redirect. It wasn't implemented: `api.js` still adds `status` and handles 401. That behaviour fixed the iPhone "Loading…" hang, and errors are required to carry the HTTP status. Revert that line, or decide otherwise.
 
 **1. Containerize the frontend for local integration testing** (production is now a static Cloudflare Worker, see Complete; the runtime-config notes below only apply if a container is ever used for production):
 
