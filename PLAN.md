@@ -22,7 +22,7 @@ All routes and components are implemented and working against a real backend (vi
 - `GET /api/measurement-types` — returns measurement types with nested units (`{ id, label, units: [{ id, label, abbreviation }] }`)
 - Measurement types + units are now full admin CRUD: `Admin.svelte` has a "Measurement Types" section (add/rename/delete type, add/edit/delete unit per type), backed by `POST|PUT|DELETE /api/measurement-types[/:id]` and `POST|PUT|DELETE /api/measurement-types/:id/units[/:unitId]`
 - `MeasurementForm` now has a single `<select>` for unit, grouped by type via `<optgroup>`, displaying `"<label> (<abbreviation>)"`; picking a unit sets both the measurement's `type` (parent type's label) and `unit` (abbreviation) — there is no separate type field anymore
-- Dev setup: Vite proxy to `https://localhost:8443` with `secure: false`; MSW activated by `VITE_API_BASE_URL=mock`
+- Dev setup: Vite proxy to `https://localhost:9443` with `secure: false`; MSW activated by `VITE_API_BASE_URL=mock`
 - Svelte 5 compatibility: all components use runes (`$props`, `$state`, `$derived`, `$effect`, `{@render}`), no Svelte 4 idioms remaining
 - Favicon wired up (`public/` + `<link>` tags in `index.html`). It now matches the app's logo mark (the white pulse line on a teal `--nav-mark` rounded square shown next to "bioStats"): `public/favicon.svg` is the source, and the PNG sizes and `favicon.ico` (16/32/48) were rendered from it with headless Chrome. The 16/32/48px versions use a heavier stroke so the line stays visible, and `apple-touch-icon.png` is full-bleed because iOS rounds the corners itself.
 - `README.md` added (setup, commands, CSV import field requirements)
@@ -113,6 +113,12 @@ All routes and components are implemented and working against a real backend (vi
     - A revoked session: one refresh 401, then the login screen.
     - Logout then reload: the refresh is refused and the login screen shows.
   - **Not yet verified against the real backend.**
+
+- **Developer docs site** (`docs/`, VitePress 1.6.4, published to GitHub Pages at `https://bitsandbytes.github.io/biostats.js/` by `.github/workflows/docs.yml` on push to `main`; PRs only build). Pages: Overview (stack, architecture, routes, layout), Build & deploy (`VITE_API_BASE_URL`, mock mode, tests, Cloudflare, CI, checklist), Backend integration (auth + refresh flow, error shapes/statuses, CORS/cookies, examples), API reference, Working on these docs. No database page, because the frontend has none; it links to the backend's.
+  - Swagger: `docs/public/swagger/index.html` loads the **backend's** generated spec from its Pages site instead of keeping a copy here. The published spec currently lacks `POST /api/auth/refresh` (the backend's `main` hasn't deployed it yet).
+  - New scripts `docs:dev`/`docs:build`/`docs:preview`. Fixed the last stale "throws the parsed body directly" line in `API_CONTRACT.md` (Error Responses), and the dev proxy port in this file (8443 → 9443, matching `vite.config.js`).
+  - Verified: `npm run docs:build` passes, and every page, the Swagger page, internal links, anchors and external links return 200 from `vitepress preview`. In headless Chrome, the Swagger page renders the backend spec.
+  - **Manual step outstanding:** GitHub **Settings → Pages → Source: GitHub Actions**. The repo currently looks private (github.com returns 404 when signed out), so Pages needs a paid plan, the site will be public anyway, and its "Edit on GitHub" and source-file links only work for people with repo access.
 
 ### In Progress
 
@@ -265,13 +271,13 @@ See `API_CONTRACT.md` for the full contract. Summary:
 ## Dev Setup
 
 ```bash
-npm run dev    # Vite dev server — proxies /api/* to https://localhost:8443
+npm run dev    # Vite dev server — proxies /api/* to https://localhost:9443
 npm run build
 npm run preview
 ```
 
 **`.env.local` options:**
-- `VITE_API_BASE_URL=` (empty) — routes API calls through the Vite proxy to `https://localhost:8443`
+- `VITE_API_BASE_URL=` (empty) — routes API calls through the Vite proxy to `https://localhost:9443`
 - `VITE_API_BASE_URL=mock` — activates MSW; all `/api/*` calls are intercepted in the browser
 
 The Vite proxy uses `secure: false` so the backend's self-signed cert is accepted. The browser never makes a direct TLS connection to the backend in dev.

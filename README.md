@@ -63,6 +63,19 @@ Styling uses the Figtree font (bundled via `@fontsource/figtree`, no external re
 
 See `CLAUDE.md` for a detailed overview of the app's structure, stores, and API layer.
 
+## Developer docs
+
+The developer docs site is built from `docs/` with VitePress and published to GitHub Pages at <https://bitsandbytes.github.io/biostats.js/>. It covers architecture, build and deploy, backend integration (auth, token refresh, errors, CORS), and the API reference.
+
+- Swagger UI: <https://bitsandbytes.github.io/biostats.js/swagger/>. It loads the backend's generated spec from <https://bitsandbytes.github.io/biostats-service/openapi/openapi.json>.
+- On a locally running backend: `https://localhost:9443/swagger-ui/index.html` (UI) and `https://localhost:9443/v3/api-docs` (spec).
+- `API_CONTRACT.md` stays the source of truth for the API.
+
+```bash
+npm run docs:dev       # live preview at http://localhost:5173/biostats.js/
+npm run docs:build     # → docs/.vitepress/dist (fails on dead links)
+```
+
 ## CSV Import
 
 The `/import` route (`src/routes/Import.svelte`) lets you bulk-import measurements from a CSV file.

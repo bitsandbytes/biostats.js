@@ -9,7 +9,7 @@ When changing anything under `src/`:
 2. Implement the change
 3. Add docstrings/comments — enough for someone new to understand each file and any non-trivial function
 4. Run the test suite and confirm it passes before saying you're done
-5. Update README.md if endpoints or behavior changed
+5. Update README.md if endpoints or behavior changed, and the matching page in `docs/` (developer docs site)
 6. Update PLAN.md to reflect scope completed/remaining
 
 ## Commands
@@ -19,6 +19,7 @@ npm run dev      # Start dev server (Vite HMR)
 npm run build    # Production build
 npm run preview  # Preview production build
 npm test         # Unit tests (vitest)
+npm run docs:dev   # Developer docs site (VitePress, docs/) — docs:build / docs:preview too
 ```
 
 ## Environment

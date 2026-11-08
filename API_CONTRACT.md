@@ -616,7 +616,7 @@ Unit
 
 ## Error Responses
 
-All non-2xx responses return a JSON body. The frontend throws the parsed body directly, so structure it for human readability:
+All non-2xx responses return a JSON body. The frontend throws it with the HTTP `status` added (`{ error, message, status }`, or just `{ status }` if the body isn't JSON) and shows `message` to the user, so write it for humans:
 
 ```json
 {
