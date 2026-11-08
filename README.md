@@ -21,6 +21,12 @@ VITE_API_BASE_URL=http://localhost:8080
 
 To develop without a backend, set `VITE_API_BASE_URL=mock` to use the MSW mock handlers in `src/mocks/handlers.js` instead (an empty value routes `/api/*` through the Vite dev proxy to the backend). Mock mode starts with a few demo people and about eight months of measurements (`src/mocks/seed.js`); log in with the seeded user in `handlers.js` (password `pw`).
 
+### Sessions and token refresh
+
+The backend issues a short-lived access token (15 minutes by default) and a rotating refresh token, both as cookies. When a request gets a `401`, `src/lib/api.js` calls `POST /api/auth/refresh` once and retries the request; requests that fail together share one refresh. The app returns to the login screen only when the refresh itself is refused. See **Session lifetime and refresh** in `API_CONTRACT.md`.
+
+Mock mode imitates this, keeping sessions in `sessionStorage` so a reload keeps you logged in. To try the refresh path by hand, open the DevTools console and run `mockAuth.expireAccessTokens()` (the next request refreshes and retries) or `mockAuth.revokeAll()` (the next refresh is refused and you are sent to login). Loading the app with `?accessttl=30` makes access tokens expire after 30 seconds.
+
 ## Commands
 
 ```bash

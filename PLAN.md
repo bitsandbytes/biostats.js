@@ -100,31 +100,68 @@ All routes and components are implemented and working against a real backend (vi
   - `npm test` (116 passing) and `npm run build` are green. Checked in headless Chrome at 390×844: the attributes render and the layout is correct.
   - **Passkeys not done**: they need backend WebAuthn endpoints. See Unresolved.
 
+- **Access/refresh token handling** (`API_CONTRACT.md` "Session lifetime and refresh"). The backend's 15-minute access tokens no longer send users back to the login screen.
+  - `src/lib/api.js`: `request()` is now `send()` (one round trip) wrapped in the refresh logic. On a 401 from anything except login/refresh/logout it calls `POST /api/auth/refresh` and retries the original request once. The refresh is **single-flighted**: concurrent 401s share one call (`sharedRefresh()`), because rotation makes parallel refreshes look like token reuse.
+  - `onUnauthorized` (back to `<Login>`) now runs only when the refresh returns 401, or when the retried request also gets a 401. It runs once per shared refresh. It never runs for `me`, login, refresh or logout. If the refresh fails some other way (5xx, network), the user stays logged in and the request fails with that error.
+  - `GET /api/auth/me` on startup goes through refresh → retry too. Logout never triggers a refresh.
+  - New `refreshSession()` export and `onSessionRefreshed(handler)`. `auth.svelte.js` uses it to keep `auth.session` (including `admin`) current from each refresh's `user`.
+  - MSW mock: new `src/mocks/mockSession.js` (unit-tested). It has expiring access tokens (15 min, or `?accessttl=<seconds>`), rotating refresh tokens, reuse detection that revokes the whole login, and logout revocation. Tokens travel in `token`/`refresh_token` cookies and are persisted to `sessionStorage`, so a reload in mock mode now keeps you logged in, where before it always logged you out. `window.mockAuth.expireAccessTokens()` / `.revokeAll()` let you exercise the refresh path from the console.
+  - `API_CONTRACT.md`: the stale "throws the parsed body directly" line now describes the body-plus-`status` error shape (this was Unresolved 0b). The frontend rules also gained the non-401 refresh failure case and the "no second refresh" rule.
+  - `npm test` (141 passing) and `npm run build` are green. Verified in headless Chrome at 1440×900 in mock mode, with no page errors:
+    - An expired token on the Dashboard: the people and measurement-types requests both got a 401, and one shared refresh was followed by both retries.
+    - A hard reload with an expired token: `me` 401 → refresh 200 → `me` 200, still logged in.
+    - A revoked session: one refresh 401, then the login screen.
+    - Logout then reload: the refresh is refused and the login screen shows.
+  - **Not yet verified against the real backend.**
+
 ### In Progress
 
 Nothing in progress.
 
 ### Next Step to Pick Up From
 
-1. **Restrict person deletion to admins and the person's creator** (not urgent). Today any logged-in user can delete any person, and nothing records who created a person. This needs:
+1. **Handle backend cold starts (Render spin-up + DB wake-up) instead of hanging.** *Observed 2026-11-07:* after about an hour idle, opening the app showed nothing and logout did nothing. The backend errors were only visible in DevTools. Render takes about a minute to spin up the container, and the database may also be waking up. Causes found in the code:
+   - `App.svelte` renders **nothing** while `initSession()` is pending (`{#if !ready}` is empty), and `fetch` has no timeout. A slow `GET /api/auth/me` therefore looks like a blank, hung page.
+   - `logout()` in `auth.svelte.js` awaits `api.logout()` *before* clearing `auth.session`. A 5xx/network error throws (unhandled in `Sidebar`'s `onclick`), so the user stays "logged in" and the click appears to do nothing.
+   - Transient failures during spin-up (network `TypeError`, `502/503/504` from Render's proxy, and `500`s while the DB connection times out) are thrown straight to the page. Nothing retries them.
+
+   Plan:
+   - **Wait long enough, with a deadline.** Add a `waitForBackend` / retry layer in `api.js`. Retry transient failures (network error, 502/503/504) with backoff (e.g. 1s, 2s, 4s, capped at 5s) until a total deadline of **~90s**, which is longer than Render's ~60s spin-up. Give each attempt an `AbortController` timeout so a stuck connection can't hang forever. Only auto-retry requests that are safe to repeat: GETs, `me`, and `logout`. Don't auto-retry POST/PUT/DELETE data writes. A write that fails with a transient error shows the error with a Retry button, as today. **Refresh needs care:** retrying a refresh whose first attempt actually reached the server would present a rotated token and trigger reuse detection. So retry a refresh only on a network error or 502/503/504 before a response (the request never reached the app). Do the warm-up before the refresh (see next point). The refresh itself is already single-flighted in `api.js` (`sharedRefresh()`), and a refresh that fails with a non-401 error already leaves the user logged in.
+   - **Warm-up check on app load (preferred).** Add a public `GET /api/health` to `API_CONTRACT.md`. It needs no auth, returns `200 {"status":"ok"}` only once the DB answers (e.g. `SELECT 1`), and returns `503` otherwise. `initSession()` polls it until it is OK or the 90s deadline passes, *then* calls `me` (→ refresh). That keeps "is the server awake?" separate from auth, so cold-start retries never touch the rotating refresh token. The backend needs to implement it: Spring Actuator's `/actuator/health` with the DB indicator would do, if it's exposed under `/api` or the contract names that path.
+   - **Visible start-up state.** Replace the empty `{#if !ready}` with a splash: the logo plus "Connecting…". After about 3s with no answer, switch to "Starting the server — this can take up to a minute after a period of inactivity", with a spinner or progress indicator. Respect `prefers-reduced-motion`.
+   - **Slow requests after load.** A small `connection` store (`src/stores/connection.svelte.js`: `{ slow: boolean }`) is set by `request()` when any request has been pending for more than ~3s. `AppShell` shows a non-blocking banner ("Server is waking up…") while it's set. This covers the case where the tab was left open for an hour and the first click hits a cold backend.
+   - **Give up → login with an error.** If the deadline passes during startup, show `<Login>` with a banner: "Couldn't reach the server. It may still be starting. Try again in a moment." The same applies mid-session if a request still fails after the deadline: clear the session and show `<Login>` with that message (this is what was asked for). Possible softening to decide on: keep the user on the page with a Retry button for a mid-session timeout, and only send them to login on startup or auth failures. Pass the message through the auth store (e.g. `auth.notice`) rather than a prop, so it survives the `App.svelte` branch switch. `Login` clears it on submit.
+   - **Logout never hangs.** Clear `auth.session` (and the `people` / `measurementTypes` stores) immediately, then send `POST /api/auth/logout` in the background with a short timeout (e.g. 10s), and catch its errors. The refresh cookie is `HttpOnly`, so only the server can clear it. If the logout call fails, the next load could restore the session via refresh. So if logout couldn't reach the server, show a login notice: "Signed out on this device, but the server couldn't be reached — you may still be signed in until the session expires." Optionally retry the logout on the next app load.
+   - **Errors carry status (per CLAUDE.md).** Timeouts and deadline failures throw a recognisable error (e.g. `{ status: 0, timeout: true }` or a `TimeoutError`) that `errorMessage()` turns into "The server took too long to respond…", separate from the existing network-failure message.
+   - **Tests:** with fake timers in vitest, cover: retry on 503 then success; give up at the deadline with a timeout error; no auto-retry on a POST; the slow flag is set after 3s and cleared on completion; logout clears the session even when the request rejects; refresh is never retried after a response was received; the health poll runs before `me`. In the MSW mock, add a dev-only "cold start" switch (e.g. `?coldstart=20` delays and 503s for N seconds) to check the splash and banner by hand.
+   - **Optional, outside the frontend:** a keep-alive ping (an external cron hitting `/api/health` every ~10 min) would stop Render and the DB from sleeping during working hours. That trades free-tier hours against the wait.
+
+2. **Restrict person deletion to admins and the person's creator** (not urgent). Today any logged-in user can delete any person, and nothing records who created a person. This needs:
    - a `created_by` user id on `Person`, set by `POST /api/people`. Decide what import-created people get: the importing user is the natural choice.
    - `DELETE /api/people/:id` returning `403` unless the caller is an admin or the creator, documented in `API_CONTRACT.md` and matched in the MSW mock.
    - the delete button on `PersonDetail` shown only when allowed. That means either exposing `created_by` on `PersonDetail`/`PersonSummary`, or having the backend return a `canDelete` flag.
 
-2. **Store every measurement in metric and display it in each user's preferred units.** Right now a measurement keeps whatever unit it was entered in, so a person's weight history can mix `kg` and `lbs`, and charts plot them as separate series. This is a significant change and will probably mean re-architecting how admin-managed types and units work, since a lot of effort went into letting users add arbitrary types and units. Open questions:
+3. **Store every measurement in metric and display it in each user's preferred units.** Right now a measurement keeps whatever unit it was entered in, so a person's weight history can mix `kg` and `lbs`, and charts plot them as separate series. This is a significant change and will probably mean re-architecting how admin-managed types and units work, since a lot of effort went into letting users add arbitrary types and units. Open questions:
    - Every unit needs a conversion to a canonical base unit for its type: a factor, or an offset + factor for temperature.
    - What happens to user-added types that have no metric equivalent (e.g. `bpm`, a free-form score)? Does each type declare a base unit?
    - Add a per-user display preference (metric / imperial, or per type) on `User` / `GET /api/auth/me`.
    - Plan a data migration for existing measurements, and decide how import handles units it can't convert.
    - Work out the effect on `latestByType` / `recentByType`, CSV export (export in stored or display units?), `TrendChart` series grouping, and `MeasurementForm` (enter in the preferred unit, convert on save).
 
+4. **Reference growth charts for height and weight on PersonDetail.** Add a reference chart option to the big `TrendChart`: the person's height or weight plotted over the standard percentile curves (e.g. 5th/10th/25th/50th/75th/90th/95th) for their age and sex. Each one is its own tile in a separate row under the chart ("Height-for-age", "Weight-for-age"), apart from the existing series tiles. Not implemented yet, and `API_CONTRACT.md` is deliberately unchanged for now.
+   - **Which charts — decide first.** These were requested as "AMA charts", but the AMA doesn't publish height/weight reference charts. The standard US sources are the **CDC growth charts** (ages 2–20, from the CDC's public LMS data files) and the **WHO growth standards** (0–2 years, which the CDC recommends for under-2s; WHO also covers 0–19). Adults have no height/weight percentile curves. The usual adult reference is **BMI categories** (CDC/WHO adult BMI cut-offs), which need both height and weight. Confirm which source(s) are intended before building.
+   - **Data the app doesn't have yet.** Age- and sex-specific curves need a **date of birth** and a **sex (for reference charts)** on `Person`. Today `Person` is just `name` + `notes`. This requires a contract change later: new optional fields on `POST /api/people`, `GET /api/people/:id`, plus an edit-person UI, which doesn't exist yet. Without them, the reference tiles are disabled with a hint ("Add a date of birth and sex to see growth charts"). Also decide how CSV import handles them.
+   - **Reference data.** Ship the published LMS tables (L, M, S per sex per month of age) as static JSON in the frontend, e.g. `src/data/growth/cdc-*.json`. Compute percentile curves with the LMS formula `X = M·(1 + L·S·z)^(1/L)` (or `M·e^(S·z)` when L=0) in a new tested `src/lib/growthCharts.js`. The same module gives each measurement's percentile/z-score for the tooltip ("142 cm — 63rd percentile"). Note the data source and licence/attribution in the README; CDC data is public domain.
+   - **Units and matching.** The curves are in cm/kg. A person's measurements must be found by type (`height`/`weight` by label, case-insensitive) and converted from `in`/`lbs` when needed. This overlaps with Next Step 3 (metric storage), so do 3 first or put a small conversion table in `growthCharts.js`. Measurements whose unit can't be converted are left off the reference chart.
+   - **Chart changes.** In reference mode the x-axis is **age** (months/years), not date. The y-axis is the reference unit, the percentile curves are drawn as thin muted lines with labels at the right edge, and the 50th percentile is emphasised. The person's points are drawn on top. Either give `TrendChart` a `reference` prop (age axis + background bands) or make a sibling `GrowthChart.svelte` sharing the axis/tooltip code; the second keeps `TrendChart`'s two-axis logic simpler. Selecting a reference tile replaces the normal series selection, and selecting a series tile switches back. The time-range buttons (1M/3M/…) don't apply in reference mode; show the age range the chart covers instead.
+   - **Out-of-range ages.** If the person is outside the chart's ages (e.g. an adult on CDC 2–20), the tile says so and offers the adult BMI view if that is in scope.
+   - **Tests:** LMS → percentile values checked against published CDC table values for a few ages; z-score/percentile for a known measurement; age calculation from DOB + `measured_at`; unit conversion; tiles disabled without DOB/sex. Check by hand in mock mode with seed people given DOBs/sexes.
+
 ---
 
 ## Unresolved / Needs Decision
 
 **0. Passkey sign-in.** This needs WebAuthn endpoints in `API_CONTRACT.md` and the backend: registration options and verification for a logged-in user, then authentication options and verification that start a session. On the frontend it needs `navigator.credentials` calls, `autocomplete="username webauthn"` with conditional mediation on the login email field, and a "Add a passkey" action for the signed-in user.
-
-**0b. API_CONTRACT error-handling line.** The uncommitted contract edit says "The frontend throws the parsed body directly", which drops the `status` on thrown errors and the 401 → login redirect. It wasn't implemented: `api.js` still adds `status` and handles 401. That behaviour fixed the iPhone "Loading…" hang, and errors are required to carry the HTTP status. Revert that line, or decide otherwise.
 
 **1. Containerize the frontend for local integration testing** (production is now a static Cloudflare Worker, see Complete; the runtime-config notes below only apply if a container is ever used for production):
 
@@ -181,8 +218,10 @@ See `API_CONTRACT.md` for the full contract. Summary:
 | Method | Path | Response |
 |---|---|---|
 | `POST` | `/api/auth/login` | `{ token, user }` |
-| `POST` | `/api/auth/logout` | `204` |
-| `GET` | `/api/auth/me` | `{ id, email }` |
+| `POST` | `/api/auth/refresh` | `{ token, user }` — rotates the refresh cookie |
+| `POST` | `/api/auth/logout` | `204` (no access token needed) |
+| `GET` | `/api/auth/me` | `{ id, email, admin }` |
+| `GET` | `/api/health` | *proposed* — `200` once the DB answers, else `503` (public) |
 
 ### Users
 | Method | Path | Response |
@@ -277,7 +316,7 @@ src/
 │       └── EmptyState.svelte
 │
 ├── stores/
-│   ├── auth.svelte.js             # Current user session
+│   ├── auth.svelte.js             # Current user session (cleared when a refresh is refused)
 │   ├── people.svelte.js           # PersonSummary[] for Dashboard
 │   ├── measurementTypes.svelte.js # TypeSuggestion[] for dropdowns
 │   ├── router.svelte.js           # router.path ($state) + navigate(), synced with popstate
@@ -298,6 +337,7 @@ src/
     ├── browser.js
     ├── handlers.js                # MSW — predefined measurementTypes seed data
     ├── seed.js                    # demo people + ~8 months of measurements
+    ├── mockSession.js             # access/refresh tokens: expiry, rotation, reuse detection (unit-tested)
     ├── importValidate.js          # per-row import validation → rowErrors (unit-tested)
     └── importResolve.js           # case-insensitive type/unit lookup (unit matches abbreviation or label) + auto-create, used by the /api/import handler
 ```

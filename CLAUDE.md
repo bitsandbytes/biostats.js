@@ -39,7 +39,7 @@ Svelte 5 + Vite SPA. `index.html` → `src/main.js` → `src/App.svelte`. Routin
 
 Svelte 5 runes-based state, exported from `.svelte.js` modules:
 
-- **`auth.svelte.js`** — `auth.session` (`null | { id, email }`). Mutated by `initSession()`, `login()`, `logout()`.
+- **`auth.svelte.js`** — `auth.session` (`null | { id, email, admin }`). Mutated by `initSession()`, `login()`, `logout()`.
 - **`people.svelte.js`** — `PersonSummary[]` for the Dashboard. `addMeasurement()` folds the new measurement into `latestByType` and `recentByType` in place (via `applyMeasurement` in `src/lib/summary.js`) without a re-fetch.
 - **`viewport.svelte.js`** — `desktop` breakpoint (see Responsive layout above).
 - **`measurementTypes.svelte.js`** — `store.types`: `MeasurementType[]` (`{ id, label, units: [{ id, label, abbreviation }] }`), admin-managed. Exposes CRUD helpers (`createType`, `renameType`, `removeType`, `addUnit`, `renameUnit`, `removeUnit`) that call the API and mutate the store in place.
@@ -48,7 +48,7 @@ Per-person measurement history is **not** in global state — it is fetched on d
 
 ### API (`src/lib/api.js`)
 
-Single `request(method, path, body)` helper. All calls use `credentials: 'include'` (session cookie). On non-OK responses it throws the parsed JSON body with `status` added (`{ status }` if the body isn't JSON). Any 401 except from login or `/api/auth/me` calls the `onUnauthorized` handler, which `auth.svelte.js` uses to clear the session (back to `<Login>`). Use `errorMessage(err, fallback)` for user-facing error text. This file is the source of truth for the REST contract; the Java/Spring Boot backend implements it.
+Single `request(method, path, body)` helper. All calls use `credentials: 'include'` (access + refresh token cookies). On non-OK responses it throws the parsed JSON body with `status` added (`{ status }` if the body isn't JSON). On a 401 (except from login/refresh/logout) it calls `POST /api/auth/refresh` once — single-flighted, because refresh tokens rotate and parallel refreshes look like token reuse to the server — then retries the request once. Only when the refresh is refused (or the retry 401s again) does it call the `onUnauthorized` handler (never for `/api/auth/me`, which `initSession()` handles), which `auth.svelte.js` uses to clear the session (back to `<Login>`). `onSessionRefreshed` passes each refresh's `user` to the auth store. Use `errorMessage(err, fallback)` for user-facing error text. This file is the source of truth for the REST contract; the Java/Spring Boot backend implements it.
 
 ### Routes
 
@@ -78,7 +78,7 @@ Single `request(method, path, body)` helper. All calls use `credentials: 'includ
 
 ## Local Development Without the Backend
 
-MSW (`msw` devDependency) intercepts `/api/*` fetch calls in the browser. Define handlers in `src/mocks/handlers.js` mirroring the REST contract with in-memory state. Import rules that the backend must also implement live in their own tested modules: `importValidate.js` (per-row validation → `rowErrors`) and `importResolve.js` (case-insensitive type/unit lookup + auto-create).
+MSW (`msw` devDependency) intercepts `/api/*` fetch calls in the browser. Define handlers in `src/mocks/handlers.js` mirroring the REST contract with in-memory state. Auth uses `src/mocks/mockSession.js` (expiring access tokens, rotating refresh tokens with reuse detection, carried in cookies and persisted to `sessionStorage`); `window.mockAuth.expireAccessTokens()` / `.revokeAll()` exercise the refresh path from the console. Import rules that the backend must also implement live in their own tested modules: `importValidate.js` (per-row validation → `rowErrors`) and `importResolve.js` (case-insensitive type/unit lookup + auto-create).
 
 ## Data Model
 

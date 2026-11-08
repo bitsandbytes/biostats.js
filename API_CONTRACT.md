@@ -2,9 +2,9 @@
 
 The frontend is the source of truth for this contract. The Java/Spring Boot backend implements it.
 
-All endpoints except `/api/auth/login` require a valid session cookie (`credentials: include`) or `Authorization: Bearer <token>` header. The frontend sends `credentials: 'include'` on every request via the shared `request()` helper in `src/lib/api.js`.
+All endpoints except `/api/auth/login`, `/api/auth/refresh` and `/api/auth/logout` require a valid access token, sent as the `token` cookie (`credentials: include`) or an `Authorization: Bearer <token>` header. See *Session lifetime and refresh* below for what happens when it expires. The frontend sends `credentials: 'include'` on every request via the shared `request()` helper in `src/lib/api.js`.
 
-Non-2xx responses return a JSON error body. The frontend throws the parsed body directly.
+Non-2xx responses return a JSON error body (`{ error, message }`). The frontend throws that body with the HTTP `status` added; if the body isn't JSON (for example a proxy's HTML error page) it throws `{ status }`. A `401` is first answered with a token refresh (see *Session lifetime and refresh*).
 
 ### Cross-origin deployment
 
@@ -29,9 +29,41 @@ This document remains the source of truth; the generated spec describes the same
 
 ## Auth
 
+### Session lifetime and refresh
+
+A session uses two tokens:
+
+| | Access token | Refresh token |
+|---|---|---|
+| Cookie | `token` (`HttpOnly; Secure; Path=/`) | `refresh_token` (`HttpOnly; Secure; Path=/api/auth`) |
+| Also returned in body | Yes (`token` field on login/refresh) | **No**, cookie only |
+| Format | Signed JWT, validated statelessly | Opaque random string; the server stores only its hash |
+| Lifetime | `JWT_EXPIRATION_MS` (default 15 min) | Idle timeout `REFRESH_TOKEN_IDLE_MS` (default 7 days), capped by an absolute limit `REFRESH_TOKEN_MAX_MS` (default 30 days) from login |
+
+Both cookies use the configured `SameSite` value (`AUTH_COOKIE_SAME_SITE`), and each cookie's `Max-Age` matches its token's lifetime.
+
+- **Rotation:** every successful refresh issues a new refresh token and invalidates the one presented. The idle timer restarts; the absolute limit does not.
+- **Reuse detection:** if an already-used refresh token is presented again, the server treats it as stolen and revokes every refresh token from that login (the whole session), returning `401`.
+- **Idle timeout:** a user with no requests for longer than `REFRESH_TOKEN_IDLE_MS` must log in again. An active user is never interrupted before the absolute limit.
+- **Revocation:** logout, and deleting a user, revoke that user's refresh tokens. An already-issued access token stays valid until it expires (at most `JWT_EXPIRATION_MS`).
+
+**Frontend behaviour (required).** The shared `request()` helper must:
+
+1. On a `401` from any endpoint other than `/api/auth/login` and `/api/auth/refresh`, call `POST /api/auth/refresh` **once** and, if it succeeds, retry the original request once.
+2. Single-flight the refresh: if several requests get `401` at the same time, they all wait on the same refresh call, not one each. (Rotation makes parallel refreshes look like token reuse and would log the user out.)
+3. If the refresh returns `401`, clear local auth state and send the user to the login screen. If it fails any other way (`5xx`, network error), the session may still be valid, so the user stays logged in and the request fails with that error.
+4. On app load, a `401` from `GET /api/auth/me` follows the same path (refresh, then retry `me`).
+5. If the retried request gets a `401` again, do not refresh a second time; treat it as the end of the session.
+
+Implemented in `request()` / `refreshSession()` in `src/lib/api.js`. Retrying is safe for every method because a `401` means the server rejected the request before acting on it.
+
+Non-browser clients that use `Authorization: Bearer` (curl, Swagger UI) get no refresh token in the body, so they log in again when the access token expires.
+
+---
+
 ### `POST /api/auth/login`
 
-Authenticate a user and establish a session.
+Authenticate a user and start a session.
 
 - **Auth required:** No
 - **Request body:**
@@ -47,20 +79,46 @@ Authenticate a user and establish a session.
     "token": "string",
     "user": {
       "id": "uuid",
-      "email": "string"
+      "email": "string",
+      "admin": true
     }
   }
   ```
+- **Cookies set:** `token` (access token) and `refresh_token`.
+- **Response `401`** for bad credentials.
+
+---
+
+### `POST /api/auth/refresh`
+
+Exchange the refresh token for a new access token and a new (rotated) refresh token.
+
+- **Auth required:** No access token needed. Requires the `refresh_token` cookie.
+- **Request body:** none
+- **Response `200`:** same shape as login:
+  ```json
+  {
+    "token": "string",
+    "user": {
+      "id": "uuid",
+      "email": "string",
+      "admin": true
+    }
+  }
+  ```
+- **Cookies set:** new `token` and new `refresh_token`.
+- **Response `401`** if the cookie is missing, unknown, expired (idle or absolute), revoked, or reused. The response also clears both cookies (`Max-Age=0`). The frontend must then show the login screen and must not retry.
 
 ---
 
 ### `POST /api/auth/logout`
 
-Invalidate the current session.
+End the session: revoke the refresh token's session and clear both cookies.
 
-- **Auth required:** Yes
+- **Auth required:** No. Logout works even after the access token has expired. It uses the `refresh_token` cookie if present; without one it just clears cookies.
 - **Request body:** none
-- **Response:** `204 No Content`
+- **Response:** `204 No Content`, always (also when there was nothing to revoke).
+- **Cookies cleared:** `token` and `refresh_token` (`Max-Age=0`).
 
 ---
 
@@ -77,7 +135,7 @@ Return the currently authenticated user. Called on app load to restore session s
     "admin": true
   }
   ```
-- **Response `401`** if no valid session.
+- **Response `401`** if the access token is missing or expired. The frontend then tries `POST /api/auth/refresh` (see *Session lifetime and refresh*).
 
 ---
 
